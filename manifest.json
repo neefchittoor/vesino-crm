@@ -2,7 +2,7 @@
   "name": "Vesino Ventures CRM",
   "short_name": "Vesino CRM",
   "description": "Vesino Ventures Sales & Operations CRM",
-  "start_url": "./app.html",
+  "start_url": "./crm.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

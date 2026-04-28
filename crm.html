@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vesino CRM">
-  <link rel="manifest" href="./manifest.json">
 <title>Vesino Ventures CRM</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -318,6 +317,66 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.025
 .step-text{font-size:12px;color:var(--text2);line-height:1.5}
 @media(max-width:640px){.btn-logout-top{display:flex!important}}
 
+
+/* ══════════════════════════════════
+   SPLASH SCREEN
+══════════════════════════════════ */
+.load-screen{position:fixed;inset:0;background:#06061a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;overflow:hidden}
+
+.splash-rings{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.splash-ring{position:absolute;border-radius:50%;border:1px solid rgba(99,102,241,0.2)}
+.sr1{width:320px;height:320px;animation:sRing 4s linear infinite}
+.sr2{width:220px;height:220px;animation:sRing 4s linear infinite reverse .5s;border-color:rgba(139,92,246,0.25)}
+.sr3{width:140px;height:140px;animation:sRing 4s linear infinite 1s;border-color:rgba(167,139,250,0.3)}
+@keyframes sRing{0%{transform:rotate(0deg) scale(1);opacity:.4}50%{transform:rotate(180deg) scale(1.05);opacity:1}100%{transform:rotate(360deg) scale(1);opacity:.4}}
+
+.splash-content{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;animation:splashIn .9s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes splashIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+
+.splash-logo-wrap{width:90px;height:90px;background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:24px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;box-shadow:0 0 40px rgba(99,102,241,.5),0 0 80px rgba(99,102,241,.2);border:1px solid rgba(139,92,246,.4)}
+.splash-name{font-size:32px;font-weight:900;letter-spacing:8px;color:white;margin-bottom:4px}
+.splash-tagline{font-size:11px;letter-spacing:5px;color:rgba(167,139,250,.7);text-transform:uppercase}
+
+.splash-loader{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);width:160px;height:2px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.splash-loader-fill{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6,#22d3ee);animation:splashLoad 1.8s cubic-bezier(.4,0,.2,1) forwards;width:0%}
+@keyframes splashLoad{0%{width:0%}100%{width:100%}}
+
+/* ══════════════════════════════════
+   ONBOARDING
+══════════════════════════════════ */
+#onboardScreen{position:fixed;inset:0;background:#06061a;z-index:9998;display:none;flex-direction:column;overflow:hidden}
+
+.ob-skip{position:absolute;top:52px;right:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);padding:7px 16px;border-radius:20px;font-size:12px;cursor:pointer;z-index:10;letter-spacing:.5px}
+.ob-skip:active{background:rgba(255,255,255,.15)}
+
+.ob-dots{position:absolute;top:60px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10}
+.ob-dot{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.2);transition:all .4s ease}
+.ob-dot.active{width:24px;background:#6366f1}
+
+.ob-slides{flex:1;position:relative;overflow:hidden}
+.ob-slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:100px;opacity:0;transform:translateX(100%);transition:all .5s cubic-bezier(.4,0,.2,1)}
+.ob-slide.active{opacity:1;transform:translateX(0)}
+.ob-slide.exit{opacity:0;transform:translateX(-80%)}
+
+.ob-illustration{width:100%;display:flex;justify-content:center;margin-bottom:10px}
+.ob-illustration svg{overflow:visible}
+
+.ob-text-wrap{padding:0 32px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.ob-badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#818cf8;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.1);padding:5px 14px;border-radius:20px;margin-bottom:14px}
+.ob-title{font-size:28px;font-weight:800;color:white;line-height:1.25;margin-bottom:14px;letter-spacing:-.3px}
+.ob-desc{font-size:14px;color:rgba(148,163,184,.8);line-height:1.7;max-width:300px}
+
+.ob-bottom{padding:20px 32px 44px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.ob-next{width:100%;max-width:320px;padding:17px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:16px;color:white;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.3px;box-shadow:0 8px 24px rgba(99,102,241,.4);transition:transform .15s,box-shadow .15s}
+.ob-next:active{transform:scale(.97);box-shadow:0 4px 12px rgba(99,102,241,.3)}
+
+/* Bar chart animation */
+@keyframes barGrow{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
+.bar-anim{animation:barGrow .8s cubic-bezier(.34,1.2,.64,1) forwards}
+
+/* Trend line animation */
+.trend-line{animation:drawLine 1.2s .3s ease forwards}
+@keyframes drawLine{to{stroke-dashoffset:0}}
 </style>
 </head>
 <body>
@@ -344,53 +403,184 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.025
 <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
 <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
 <div class="load-screen" id="loadScreen">
-  <!-- Animated background particles -->
-  <canvas id="introCanvas" style="position:absolute;inset:0;width:100%;height:100%;opacity:0.4"></canvas>
-  
-  <!-- Geometric accent lines -->
-  <div class="intro-lines">
-    <div class="intro-line il1"></div>
-    <div class="intro-line il2"></div>
-    <div class="intro-line il3"></div>
+  <canvas id="splashCanvas" style="position:absolute;inset:0;width:100%;height:100%;opacity:0.35"></canvas>
+  <div class="splash-rings">
+    <div class="splash-ring sr1"></div>
+    <div class="splash-ring sr2"></div>
+    <div class="splash-ring sr3"></div>
+  </div>
+  <div class="splash-content">
+    <div class="splash-logo-wrap">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+        <path d="M10 12 L32 52 L54 12" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="32" cy="52" r="4" fill="#a78bfa"/>
+      </svg>
+    </div>
+    <div class="splash-name">VESINO</div>
+    <div class="splash-tagline">VENTURES</div>
+  </div>
+  <div class="splash-loader">
+    <div class="splash-loader-fill"></div>
+  </div>
+</div>
+<!-- ONBOARDING SYSTEM - Insert between loadScreen and loginPage -->
+
+<!-- SPLASH SCREEN -->
+<div id="splashScreen" style="display:none">
+  <canvas id="splashCanvas"></canvas>
+  <div class="splash-rings">
+    <div class="splash-ring sr1"></div>
+    <div class="splash-ring sr2"></div>
+    <div class="splash-ring sr3"></div>
+  </div>
+  <div class="splash-content">
+    <div class="splash-logo-wrap">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+        <path d="M10 12 L32 52 L54 12" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="32" cy="52" r="4" fill="#a78bfa"/>
+      </svg>
+    </div>
+    <div class="splash-name">VESINO</div>
+    <div class="splash-sub">VENTURES</div>
+  </div>
+</div>
+
+<!-- ONBOARDING SLIDES -->
+<div id="onboardScreen" style="display:none">
+  <!-- Progress dots -->
+  <div class="ob-dots" id="obDots">
+    <div class="ob-dot active" data-i="0"></div>
+    <div class="ob-dot" data-i="1"></div>
+    <div class="ob-dot" data-i="2"></div>
   </div>
 
-  <!-- Main content -->
-  <div class="intro-wrap">
-    <!-- Logo mark -->
-    <div class="intro-logo-wrap">
-      <div class="intro-logo-ring r1"></div>
-      <div class="intro-logo-ring r2"></div>
-      <div class="intro-logo-ring r3"></div>
-      <div class="intro-logo-mark">
-        <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-          <path d="M8 10 L26 42 L44 10" stroke="white" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="26" cy="42" r="3.5" fill="#a78bfa"/>
+  <!-- Skip -->
+  <button class="ob-skip" onclick="goToLogin()">Skip</button>
+
+  <!-- Slides container -->
+  <div class="ob-slides" id="obSlides">
+
+    <!-- Slide 1: Sales -->
+    <div class="ob-slide active" id="obs0">
+      <div class="ob-illustration">
+        <svg width="260" height="220" viewBox="0 0 260 220" fill="none">
+          <!-- Background glow -->
+          <ellipse cx="130" cy="140" rx="100" ry="60" fill="rgba(99,102,241,0.08)"/>
+          <!-- Bar chart -->
+          <rect x="30" y="140" width="32" height="60" rx="6" fill="rgba(99,102,241,0.3)" class="bar-anim"/>
+          <rect x="74" y="100" width="32" height="100" rx="6" fill="rgba(99,102,241,0.5)" class="bar-anim"/>
+          <rect x="118" y="70" width="32" height="130" rx="6" fill="#6366f1" class="bar-anim"/>
+          <rect x="162" y="50" width="32" height="150" rx="6" fill="#818cf8" class="bar-anim"/>
+          <rect x="206" y="30" width="32" height="170" rx="6" fill="#a5b4fc" class="bar-anim"/>
+          <!-- Trend line -->
+          <polyline points="46,140 90,100 134,70 178,50 222,30" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="300" stroke-dashoffset="300" class="trend-line"/>
+          <!-- Dots on trend -->
+          <circle cx="46" cy="140" r="4" fill="#22d3ee" opacity="0"/>
+          <circle cx="90" cy="100" r="4" fill="#22d3ee" opacity="0"/>
+          <circle cx="134" cy="70" r="4" fill="#22d3ee" opacity="0"/>
+          <circle cx="178" cy="50" r="4" fill="#22d3ee" opacity="0"/>
+          <circle cx="222" cy="30" r="4" fill="#22d3ee" opacity="0"/>
+          <!-- Floating card -->
+          <g transform="translate(160,10)">
+            <rect width="90" height="36" rx="10" fill="rgba(30,27,75,0.9)" stroke="rgba(139,92,246,0.5)" stroke-width="1"/>
+            <text x="10" y="14" fill="#a78bfa" font-size="8" font-family="sans-serif" font-weight="700">GROWTH</text>
+            <text x="10" y="28" fill="white" font-size="12" font-family="sans-serif" font-weight="800">+42%</text>
+          </g>
         </svg>
       </div>
-    </div>
-
-    <!-- Brand name -->
-    <div class="intro-brand">
-      <div class="intro-company">VESINO VENTURES</div>
-      <div class="intro-product">Enterprise CRM</div>
-      <div class="intro-divider"><span></span><span class="intro-dot"></span><span></span></div>
-      <div class="intro-tagline">Sales · Operations · Growth</div>
-    </div>
-
-    <!-- Loading indicator -->
-    <div class="intro-loader">
-      <div class="intro-loader-track">
-        <div class="intro-loader-fill" id="loaderFill"></div>
+      <div class="ob-text-wrap">
+        <div class="ob-badge">Sales Intelligence</div>
+        <div class="ob-title">Track Every<br>Sale in Real Time</div>
+        <div class="ob-desc">Monitor orders, conversions, and revenue across your entire team from one powerful dashboard.</div>
       </div>
-      <div class="intro-loader-msg" id="loadMsg">Initializing...</div>
     </div>
+
+    <!-- Slide 2: Operations -->
+    <div class="ob-slide" id="obs1">
+      <div class="ob-illustration">
+        <svg width="260" height="220" viewBox="0 0 260 220" fill="none">
+          <ellipse cx="130" cy="150" rx="90" ry="50" fill="rgba(16,185,129,0.06)"/>
+          <!-- Pipeline steps -->
+          <rect x="15" y="90" width="46" height="46" rx="12" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.4)" stroke-width="1.5"/>
+          <text x="38" y="118" fill="#818cf8" font-size="18" font-family="sans-serif" text-anchor="middle">📋</text>
+          <rect x="77" y="90" width="46" height="46" rx="12" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.4)" stroke-width="1.5"/>
+          <text x="100" y="118" fill="#fcd34d" font-size="18" font-family="sans-serif" text-anchor="middle">✅</text>
+          <rect x="139" y="90" width="46" height="46" rx="12" fill="rgba(16,185,129,0.15)" stroke="rgba(16,185,129,0.4)" stroke-width="1.5"/>
+          <text x="162" y="118" fill="#34d399" font-size="18" font-family="sans-serif" text-anchor="middle">🏷️</text>
+          <rect x="201" y="90" width="46" height="46" rx="12" fill="rgba(6,182,212,0.15)" stroke="rgba(6,182,212,0.4)" stroke-width="1.5"/>
+          <text x="224" y="118" fill="#22d3ee" font-size="18" font-family="sans-serif" text-anchor="middle">🚀</text>
+          <!-- Arrows -->
+          <path d="M61 113 L77 113" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" marker-end="url(#arr)"/>
+          <path d="M123 113 L139 113" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+          <path d="M185 113 L201 113" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+          <!-- Labels -->
+          <text x="38" y="150" fill="rgba(255,255,255,0.4)" font-size="7" font-family="sans-serif" text-anchor="middle">Order</text>
+          <text x="100" y="150" fill="rgba(255,255,255,0.4)" font-size="7" font-family="sans-serif" text-anchor="middle">Confirm</text>
+          <text x="162" y="150" fill="rgba(255,255,255,0.4)" font-size="7" font-family="sans-serif" text-anchor="middle">Label</text>
+          <text x="224" y="150" fill="rgba(255,255,255,0.4)" font-size="7" font-family="sans-serif" text-anchor="middle">Dispatch</text>
+          <!-- Top stats -->
+          <rect x="60" y="20" width="140" height="50" rx="14" fill="rgba(16,185,129,0.1)" stroke="rgba(16,185,129,0.3)" stroke-width="1"/>
+          <text x="130" y="44" fill="#34d399" font-size="11" font-family="sans-serif" text-anchor="middle" font-weight="700">Today's Pipeline</text>
+          <text x="85" y="62" fill="white" font-size="10" font-family="sans-serif" text-anchor="middle">42 Orders</text>
+          <text x="175" y="62" fill="#fcd34d" font-size="10" font-family="sans-serif" text-anchor="middle">8 Pending</text>
+        </svg>
+      </div>
+      <div class="ob-text-wrap">
+        <div class="ob-badge" style="color:#34d399;border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.1)">Operations</div>
+        <div class="ob-title">Full Order<br>Pipeline Control</div>
+        <div class="ob-desc">From order placement to delivery — manage confirmations, labels, dispatch and OFD status seamlessly.</div>
+      </div>
+    </div>
+
+    <!-- Slide 3: Team -->
+    <div class="ob-slide" id="obs2">
+      <div class="ob-illustration">
+        <svg width="260" height="220" viewBox="0 0 260 220" fill="none">
+          <ellipse cx="130" cy="150" rx="95" ry="55" fill="rgba(139,92,246,0.07)"/>
+          <!-- Central hub -->
+          <circle cx="130" cy="100" r="36" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" stroke-width="1.5"/>
+          <circle cx="130" cy="100" r="24" fill="rgba(99,102,241,0.25)" stroke="rgba(139,92,246,0.6)" stroke-width="1.5"/>
+          <text x="130" y="107" fill="white" font-size="20" font-family="sans-serif" text-anchor="middle">👥</text>
+          <!-- Connecting lines -->
+          <line x1="130" y1="64" x2="130" y2="30" stroke="rgba(139,92,246,0.3)" stroke-width="1" stroke-dasharray="4,3"/>
+          <line x1="100" y1="80" x2="55" y2="55" stroke="rgba(139,92,246,0.3)" stroke-width="1" stroke-dasharray="4,3"/>
+          <line x1="160" y1="80" x2="205" y2="55" stroke="rgba(139,92,246,0.3)" stroke-width="1" stroke-dasharray="4,3"/>
+          <line x1="94" y1="110" x2="50" y2="135" stroke="rgba(139,92,246,0.3)" stroke-width="1" stroke-dasharray="4,3"/>
+          <line x1="166" y1="110" x2="210" y2="135" stroke="rgba(139,92,246,0.3)" stroke-width="1" stroke-dasharray="4,3"/>
+          <!-- Role nodes -->
+          <circle cx="130" cy="22" r="18" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.5)" stroke-width="1.5"/>
+          <text x="130" y="27" fill="#fcd34d" font-size="13" font-family="sans-serif" text-anchor="middle">👑</text>
+          <circle cx="44" cy="48" r="18" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" stroke-width="1.5"/>
+          <text x="44" y="53" fill="#818cf8" font-size="13" font-family="sans-serif" text-anchor="middle">💼</text>
+          <circle cx="216" cy="48" r="18" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" stroke-width="1.5"/>
+          <text x="216" y="53" fill="#818cf8" font-size="13" font-family="sans-serif" text-anchor="middle">📞</text>
+          <circle cx="38" cy="140" r="18" fill="rgba(16,185,129,0.15)" stroke="rgba(16,185,129,0.5)" stroke-width="1.5"/>
+          <text x="38" y="145" fill="#34d399" font-size="13" font-family="sans-serif" text-anchor="middle">✅</text>
+          <circle cx="222" cy="140" r="18" fill="rgba(6,182,212,0.15)" stroke="rgba(6,182,212,0.5)" stroke-width="1.5"/>
+          <text x="222" y="145" fill="#22d3ee" font-size="13" font-family="sans-serif" text-anchor="middle">📦</text>
+          <!-- Labels -->
+          <text x="130" y="7" fill="rgba(252,211,77,0.7)" font-size="7" font-family="sans-serif" text-anchor="middle">Admin</text>
+          <text x="44" y="33" fill="rgba(129,140,248,0.7)" font-size="7" font-family="sans-serif" text-anchor="middle">Sales</text>
+          <text x="216" y="33" fill="rgba(129,140,248,0.7)" font-size="7" font-family="sans-serif" text-anchor="middle">Confirm</text>
+          <text x="38" y="125" fill="rgba(52,211,153,0.7)" font-size="7" font-family="sans-serif" text-anchor="middle">HR</text>
+          <text x="222" y="125" fill="rgba(34,211,238,0.7)" font-size="7" font-family="sans-serif" text-anchor="middle">Dispatch</text>
+        </svg>
+      </div>
+      <div class="ob-text-wrap">
+        <div class="ob-badge" style="color:#c084fc;border-color:rgba(139,92,246,0.3);background:rgba(139,92,246,0.1)">Team Management</div>
+        <div class="ob-title">Your Entire Team<br>One Platform</div>
+        <div class="ob-desc">Role-based access for Admin, Sales, Confirmation and Data Entry. Everyone sees exactly what they need.</div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- Corner accents -->
-  <div class="corner-accent ca-tl"></div>
-  <div class="corner-accent ca-br"></div>
-  <div class="intro-version">v2.0</div>
+  <!-- Bottom CTA -->
+  <div class="ob-bottom">
+    <button class="ob-next" id="obNextBtn" onclick="obNext()">Next</button>
+  </div>
 </div>
+
 <div id="loginPage" style="display:none;width:100%;height:100vh">
   <div class="login-wrap"><div class="login-box">
     <div class="login-header">
@@ -1032,6 +1222,106 @@ switchPage=function(id){_origSwitch(id);if(window.innerWidth<=640)closeSidebar()
     requestAnimationFrame(draw);
   }
   draw();
+})();
+
+// ══════════════════════════════════
+// ONBOARDING LOGIC
+// ══════════════════════════════════
+var OB_STEP = 0;
+var OB_TOTAL = 3;
+var OB_KEY = 'vesino_ob_done';
+
+function obHasSeenOnboarding(){
+  try{ return localStorage.getItem(OB_KEY) === '1'; }catch(e){ return false; }
+}
+function obMarkDone(){
+  try{ localStorage.setItem(OB_KEY,'1'); }catch(e){}
+}
+
+function showSplash(cb){
+  var splash = document.getElementById('loadScreen');
+  if(splash) splash.style.display = 'flex';
+  // Animate canvas particles
+  var c = document.getElementById('splashCanvas');
+  if(c){
+    var ctx=c.getContext('2d');
+    c.width=window.innerWidth; c.height=window.innerHeight;
+    var pts=[];
+    for(var i=0;i<50;i++) pts.push({x:Math.random()*c.width,y:Math.random()*c.height,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,r:Math.random()*1.5+.5});
+    var raf;
+    function drawP(){
+      ctx.clearRect(0,0,c.width,c.height);
+      pts.forEach(function(p,i){
+        pts.forEach(function(q,j){
+          if(j<=i) return;
+          var d=Math.hypot(p.x-q.x,p.y-q.y);
+          if(d<100){ctx.beginPath();ctx.strokeStyle='rgba(99,102,241,'+(0.2*(1-d/100))+')';ctx.lineWidth=.5;ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();}
+        });
+        ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fillStyle='rgba(139,92,246,.5)';ctx.fill();
+        p.x+=p.vx;p.y+=p.vy;
+        if(p.x<0||p.x>c.width)p.vx*=-1;
+        if(p.y<0||p.y>c.height)p.vy*=-1;
+      });
+      raf=requestAnimationFrame(drawP);
+    }
+    drawP();
+    setTimeout(function(){
+      cancelAnimationFrame(raf);
+      if(splash) splash.style.transition='opacity .5s';
+      if(splash) splash.style.opacity='0';
+      setTimeout(function(){
+        if(splash){splash.style.display='none';splash.style.opacity='';}
+        cb();
+      },500);
+    },2200);
+  } else {
+    setTimeout(function(){
+      if(splash) splash.style.display='none';
+      cb();
+    },2200);
+  }
+}
+
+function showOnboarding(){
+  var ob = document.getElementById('onboardScreen');
+  if(ob){ob.style.display='flex';ob.style.opacity='0';ob.style.transition='opacity .4s';setTimeout(function(){ob.style.opacity='1';},50);}
+}
+
+function obNext(){
+  var btn = document.getElementById('obNextBtn');
+  if(OB_STEP < OB_TOTAL - 1){
+    // Transition slide
+    var curr = document.getElementById('obs'+OB_STEP);
+    OB_STEP++;
+    var next = document.getElementById('obs'+OB_STEP);
+    if(curr){ curr.classList.remove('active'); curr.classList.add('exit'); setTimeout(function(){curr.classList.remove('exit');},500);}
+    if(next){ setTimeout(function(){next.classList.add('active');},50); }
+    // Update dots
+    document.querySelectorAll('.ob-dot').forEach(function(d,i){ d.classList.toggle('active', i===OB_STEP); });
+    // Update button text
+    if(OB_STEP === OB_TOTAL - 1 && btn){ btn.textContent = 'Get Started'; btn.style.background='linear-gradient(135deg,#059669,#10b981)'; btn.style.boxShadow='0 8px 24px rgba(16,185,129,.4)';}
+  } else {
+    goToLogin();
+  }
+}
+
+function goToLogin(){
+  obMarkDone();
+  var ob = document.getElementById('onboardScreen');
+  if(ob){ob.style.transition='opacity .4s';ob.style.opacity='0';setTimeout(function(){ob.style.display='none';},400);}
+  var login = document.getElementById('loginPage');
+  if(login){login.style.display='block';login.style.opacity='0';login.style.transition='opacity .4s';setTimeout(function(){login.style.opacity='1';},50);}
+}
+
+// Touch/swipe support for slides
+(function(){
+  var startX=0,isDragging=false;
+  document.addEventListener('touchstart',function(e){if(document.getElementById('onboardScreen').style.display!=='none'){startX=e.touches[0].clientX;isDragging=true;}},{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(!isDragging) return; isDragging=false;
+    var dx=e.changedTouches[0].clientX-startX;
+    if(Math.abs(dx)>60){if(dx<0) obNext();}
+  },{passive:true});
 })();
 
 window.onload = function() {

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- VER:20260428-FINAL -->
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f97316">
 <meta name="mobile-web-app-capable" content="yes">
@@ -645,7 +646,7 @@ function makeChain(sFn, fFn) {
 var google = {script: {run: makeChain(null, null)}};
 
 
-var S={user:null,data:null,charts:{},SK:'vesino_crm_v9',timer:null};
+var S={user:null,data:null,charts:{},SK:'vesino_crm_v10',timer:null};
 var PRICES={50:{selling:699,codCharge:60,weight:114,volWeight:147},100:{selling:899,codCharge:60,weight:192,volWeight:210},150:{selling:1249,codCharge:60,weight:306,volWeight:330},200:{selling:1399,codCharge:60,weight:310,volWeight:340},250:{selling:1749,codCharge:100,weight:424,volWeight:460},300:{selling:2049,codCharge:100,weight:502,volWeight:545},350:{selling:2399,codCharge:100,weight:616,volWeight:660},400:{selling:2649,codCharge:200,weight:620,volWeight:665},450:{selling:2999,codCharge:200,weight:734,volWeight:780},500:{selling:3149,codCharge:300,weight:812,volWeight:860},550:{selling:3499,codCharge:300,weight:926,volWeight:975},600:{selling:3649,codCharge:300,weight:930,volWeight:980},650:{selling:3999,codCharge:300,weight:1044,volWeight:1095},700:{selling:4099,codCharge:400,weight:1122,volWeight:1175},750:{selling:4349,codCharge:400,weight:1236,volWeight:1290},800:{selling:4499,codCharge:400,weight:1240,volWeight:1295},850:{selling:4649,codCharge:500,weight:1354,volWeight:1410},900:{selling:4799,codCharge:500,weight:1432,volWeight:1490},1000:{selling:5149,codCharge:500,weight:1620,volWeight:1680}};
 var BOTTLE_W={50:{weight:114,volWeight:147},100:{weight:192,volWeight:210},200:{weight:310,volWeight:340}};
 var PAGE_MAP={dashboard:'Dashboard',orders:'Daily Orders',enquiries:'Enquiries',performance:'Performance',returns:'Returns',attendance:'Attendance',leaves:'Leave Management',salary:'Salary',customers:'Customers',reports:'Reports',admin:'Administration',myDash:'My Dashboard',mySalary:'My Salary',myLeave:'My Leave',confirmation:'Confirmation',dataentry:'Data Entry',salesOrders:'Sales Orders',labelGen:'Label Generation',eyManage:'EY Number Management',ofdDash:'OFD Dashboard',chatbot:'Order Lookup'};
@@ -676,15 +677,32 @@ function doLogin(){
   var btn=document.getElementById('lbtn');btn.textContent='Signing in...';btn.disabled=true;document.getElementById('lerr').textContent='';
   google.script.run
     .withSuccessHandler(function(r){
-      btn.textContent='Sign In';btn.disabled=false;
-      if(r.success){
-        S.user=r;S.user.ts=Date.now();S.user.isAdmin=r.isAdmin||r.empId==='ADMIN'||(r.role&&r.role.toLowerCase()==='admin');
-        try{localStorage.setItem(S.SK,JSON.stringify(S.user));}catch(e){}
-        document.getElementById('loginPage').style.display='none';
-        initApp();
-      }else{document.getElementById('lerr').textContent=r.msg||'Login failed';}
+      try{
+        btn.textContent='Sign In';btn.disabled=false;
+        if(r&&r.success){
+          S.user=r;S.user.ts=Date.now();
+          S.user.isAdmin=r.isAdmin||r.empId==='ADMIN'||(r.role&&r.role.toLowerCase()==='admin');
+          try{localStorage.setItem(S.SK,JSON.stringify(S.user));}catch(e){}
+          // Hide all screens safely
+          ['loginPage','splashScreen','onboardScreen','loadScreen'].forEach(function(id){
+            var el=document.getElementById(id);if(el)el.style.display='none';
+          });
+          initApp();
+        }else{
+          var lerr=document.getElementById('lerr');
+          if(lerr)lerr.textContent=(r&&r.msg)||'Login failed';
+        }
+      }catch(err){
+        var lerr=document.getElementById('lerr');
+        if(lerr)lerr.textContent='Error: '+err.message;
+        console.error('Login callback error:',err);
+      }
     })
-    .withFailureHandler(function(e){btn.textContent='Sign In';btn.disabled=false;document.getElementById('lerr').textContent='Error: '+e.message;})
+    .withFailureHandler(function(e){
+      btn.textContent='Sign In';btn.disabled=false;
+      var lerr=document.getElementById('lerr');
+      if(lerr)lerr.textContent='Error: '+e.message;
+    })
     .login(id,pw);
 }
 function doLogout(){try{localStorage.removeItem(S.SK);}catch(e){}if(S.timer)clearInterval(S.timer);S.user=null;S.data=null;document.getElementById('app').style.display='none';document.getElementById('loginPage').style.display='block';}
@@ -692,8 +710,13 @@ function initApp(){
   S.user.isAdmin=S.user.isAdmin||(S.user.role&&S.user.role.toLowerCase()==='admin')||S.user.empId==='ADMIN';
   buildSidebar();
   loadData(function(){
-    var sp=document.getElementById('splashScreen');if(sp)sp.style.display='none';document.getElementById('loginPage').style.display='none';
-    var app=document.getElementById('app');app.style.display='flex';app.style.flexDirection='row';
+    // Hide all entry screens safely
+    ['splashScreen','onboardScreen','loginPage','loadScreen'].forEach(function(id){
+      var el=document.getElementById(id);if(el)el.style.display='none';
+    });
+    // Show app
+    var app=document.getElementById('app');
+    if(app){app.style.display='flex';app.style.flexDirection='row';}
     setInterval(setLiveTime,60000);setLiveTime();
     var start=S.user.isAdmin?'dashboard':S.user.role==='Confirmation'?'confirmation':S.user.role==='DataEntry'?'dataentry':'myDash';
     switchPage(start);S.timer=setInterval(refreshData,600000);
@@ -1159,7 +1182,7 @@ window.onload = function() {
     return;
   }
   var saved = null;
-  try { saved = JSON.parse(localStorage.getItem('vesino_crm_v9')); } catch(e) {}
+  try { saved = JSON.parse(localStorage.getItem('vesino_crm_v10')); } catch(e) {}
   if (saved && saved.empId && saved.ts && (Date.now() - saved.ts) < 28800000) {
     // Has session - show splash 1.5s then restore
     setTimeout(function(){

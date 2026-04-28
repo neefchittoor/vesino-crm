@@ -713,8 +713,25 @@ function buildSidebar(){
 }
 function loadData(cb){
   google.script.run
-    .withSuccessHandler(function(d){S.data=d;buildPages();setLiveTime();if(cb)cb();})
-    .withFailureHandler(function(e){document.getElementById('loadScreen').style.display='none';document.getElementById('loginPage').style.display='block';document.getElementById('lerr').textContent='Error: '+e.message;})
+    .withSuccessHandler(function(d){
+      // Normalize all arrays to prevent forEach/map errors
+      if(d&&typeof d==='object'){
+        ['entries','monthEntries','allEntries','enquiries','monthEnq','myOrders',
+         'allOrders','myNotifs','myReturns','delivUpdates','eyList','ofdOrders',
+         'myOFDOrders','salesOrders','labelQueue','notSubmitted'].forEach(function(k){
+          if(!Array.isArray(d[k]))d[k]=[];
+        });
+        if(typeof d.pendingOrders!=='number')d.pendingOrders=0;
+        if(typeof d.confirmedOrders!=='number')d.confirmedOrders=0;
+      }
+      S.data=d;buildPages();setLiveTime();if(cb)cb();})
+    .withFailureHandler(function(e){
+      var sp=document.getElementById('splashScreen');
+      if(sp)sp.style.display='none';
+      document.getElementById('loginPage').style.display='block';
+      var lerr=document.getElementById('lerr');
+      if(lerr)lerr.textContent='Error: '+e.message;
+    })
     .getDashboardData(S.user.empId,S.user.isAdmin);
 }
 function refreshData(){google.script.run.withSuccessHandler(function(d){S.data=d;setLiveTime();var a=document.querySelector('.nav-item.active');if(a)switchPage(a.id.replace('nav-',''));}).getDashboardData(S.user.empId,S.user.isAdmin);}
@@ -748,7 +765,7 @@ function switchPage(id){
 }
 function renderDashboard(){
   var pg=document.getElementById('pg-dashboard');if(!pg||!S.data)return;
-  var s=S.data.summary||{};var entries=S.data.entries||{};var empMap=S.data.empMap||{};
+  var s=S.data.summary||{};var entries=S.data.entries||[];var empMap=S.data.empMap||{};
   var dm={};entries.forEach(function(r){dm[r.date]=(dm[r.date]||0)+(r.totalOrders||0);});
   var tDates=Object.keys(dm).sort().slice(-14);
   var totalEmps=Object.keys(empMap).filter(function(k){return empMap[k].role!=='Admin';}).length;

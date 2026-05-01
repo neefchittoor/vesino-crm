@@ -406,6 +406,9 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.025
 .bot-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:8px 12px;font-size:12px;color:var(--text);outline:none}
 .bot-send{background:linear-gradient(135deg,#b91c1c,#f97316);border:none;border-radius:50%;width:34px;height:34px;color:white;cursor:pointer;font-size:14px;flex-shrink:0}
 
+
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
 </style>
 </head>
 <body>
@@ -929,27 +932,84 @@ function renderDashboard(){
   var tDates=Object.keys(dm).sort().slice(-14);
   var totalEmps=Object.keys(empMap).filter(function(k){return empMap[k].role!=='Admin';}).length;
   var eyStats=S.data.eyStats||{available:0,total:0};
-  pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Welcome, '+S.user.name.split(' ')[0]+'</div><div class="pg-sub">'+new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div></div>'+
+  var allOrd=S.data.myOrders||[];
+  var pendingOrd=allOrd.filter(function(o){return o.status==='Pending';}).length;
+  var confirmedOrd=allOrd.filter(function(o){return o.status==='Confirmed';}).length;
+  var dispatchedOrd=allOrd.filter(function(o){return o.status==='Dispatched'||o.status==='Out for Delivery';}).length;
+  var deliveredOrd=allOrd.filter(function(o){return o.status==='Delivered';}).length;
+  var rtoOrd=allOrd.filter(function(o){return o.status==='RTO';}).length;
+  var delivRate=deliveredOrd+rtoOrd>0?((deliveredOrd/(deliveredOrd+rtoOrd))*100).toFixed(1):0;
+
+  // Team performance
+  var teamPerf={};
+  entries.forEach(function(r){
+    if(!teamPerf[r.empId])teamPerf[r.empId]={name:empMap[r.empId]?empMap[r.empId].name:r.empId,orders:0,enq:0};
+    teamPerf[r.empId].orders+=r.totalOrders||0;
+    teamPerf[r.empId].enq+=r.totalEnquiries||0;
+  });
+  var topPerformers=Object.values(teamPerf).sort(function(a,b){return b.orders-a.orders;}).slice(0,5);
+
+  pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Dashboard</div><div class="pg-sub">'+new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div></div>'+
+
+  // KPI Row 1
   '<div class="stat-grid">'+
   '<div class="sc" style="--sc-col:'+convColor(s.todayConv)+'"><div class="sl">Today Orders</div><div class="sv">'+fn(s.todayOrders)+'</div><div class="ss">'+s.todayConv+'% conv</div></div>'+
-  '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Today COD</div><div class="sv" style="color:#22d3ee">'+fn(s.todayCod)+'</div></div>'+
+  '<div class="sc" style="--sc-col:#f97316"><div class="sl">Today COD</div><div class="sv" style="color:#fb923c">'+fn(s.todayCod)+'</div></div>'+
   '<div class="sc" style="--sc-col:#a78bfa"><div class="sl">Today Prepaid</div><div class="sv" style="color:#a78bfa">'+fn(s.todayPrepaid)+'</div></div>'+
   '<div class="sc" style="--sc-col:#10b981"><div class="sl">Present Today</div><div class="sv">'+fn(s.todayPresent)+'</div><div class="ss">of '+totalEmps+' staff</div></div>'+
-  '<div class="sc" style="--sc-col:#6366f1"><div class="sl">Month Orders</div><div class="sv">'+fn(s.monthOrders)+'</div><div class="ss">'+s.monthConv+'% conv</div></div>'+
+  '<div class="sc" style="--sc-col:#f97316"><div class="sl">Month Orders</div><div class="sv">'+fn(s.monthOrders)+'</div><div class="ss">'+s.monthConv+'% conv</div></div>'+
   '<div class="sc" style="--sc-col:'+(eyStats.available<10?'#ef4444':'#10b981')+'"><div class="sl">EY Available</div><div class="sv" style="color:'+(eyStats.available<10?'#f87171':'#34d399')+'">'+fn(eyStats.available)+'</div><div class="ss">of '+fn(eyStats.total)+' total</div></div>'+
   '</div>'+
-  (S.data.pendingOrders>0?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">&#x23F3; '+S.data.pendingOrders+' orders pending confirmation</span><button class="btn btn-s" onclick="switchPage(\'salesOrders\')" style="padding:6px 14px;font-size:11px">View</button></div>':'')+
-  '<div class="g2"><div class="card"><div class="card-title">14-Day Trend</div><div style="position:relative;height:190px"><canvas id="cTrend"></canvas></div></div>'+
-  '<div class="card"><div class="card-title">Not Submitted <span class="badge br">'+S.data.notSubmitted.length+'</span></div>'+
-  (S.data.notSubmitted.length?S.data.notSubmitted.map(function(e){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-weight:600">'+e.name+'</span><span class="badge '+(e.brand==='Manveera'?'bi':'bg')+'">'+e.brand+'</span></div>';}).join(''):'<div class="empty-state"><div>All submitted!</div></div>')+
-  '</div></div>';
-  setTimeout(function(){mkChart('cTrend','line',tDates,[{data:tDates.map(function(d){return dm[d]||0;}),borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.1)',tension:0.5,pointRadius:4,fill:true,borderWidth:2}],{scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(255,255,255,.4)',font:{size:9},maxTicksLimit:7}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(255,255,255,.4)',font:{size:9}},beginAtZero:true}}});},100);
+
+  // Order Pipeline
+  '<div class="card" style="margin-bottom:16px"><div class="card-title">📦 Order Pipeline</div>'+
+  '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center">'+
+  '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:#fcd34d">'+pendingOrd+'</div><div style="font-size:10px;color:var(--text3)">Pending</div></div>'+
+  '<div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:12px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:#818cf8">'+confirmedOrd+'</div><div style="font-size:10px;color:var(--text3)">Confirmed</div></div>'+
+  '<div style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:#22d3ee">'+dispatchedOrd+'</div><div style="font-size:10px;color:var(--text3)">In Transit</div></div>'+
+  '<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:#34d399">'+deliveredOrd+'</div><div style="font-size:10px;color:var(--text3)">Delivered</div></div>'+
+  '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:12px 8px"><div style="font-size:22px;font-weight:900;color:#f87171">'+rtoOrd+'</div><div style="font-size:10px;color:var(--text3)">RTO</div></div>'+
+  '</div>'+
+  '<div style="margin-top:12px;text-align:center;font-size:12px;color:var(--text2)">Delivery Rate: <b style="color:#34d399">'+delivRate+'%</b></div>'+
+  '</div>'+
+
+  (pendingOrd>0?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">⏳ '+pendingOrd+' orders waiting for confirmation</span><button class="btn btn-s" onclick="switchPage(\'salesOrders\')" style="padding:6px 14px;font-size:11px">View →</button></div>':'')+
+
+  '<div class="g2">'+
+  '<div class="card"><div class="card-title">📈 14-Day Trend</div><div style="position:relative;height:190px"><canvas id="cTrend"></canvas></div></div>'+
+
+  '<div class="card"><div class="card-title">🏆 Top Performers</div>'+
+  (topPerformers.length?
+    '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Name</th><th>Orders</th><th>Enq</th><th>Conv%</th></tr></thead><tbody>'+
+    topPerformers.map(function(p,i){
+      var conv=p.enq>0?(p.orders/p.enq*100).toFixed(0):0;
+      var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+      return '<tr><td>'+medal+(i+1)+'</td><td style="font-weight:700">'+p.name+'</td><td style="color:#34d399;font-weight:800">'+p.orders+'</td><td style="color:var(--text3)">'+p.enq+'</td><td style="color:'+convColor(conv)+'">'+conv+'%</td></tr>';
+    }).join('')+
+    '</tbody></table></div>'
+    :'<div class="empty-state"><div>No data yet</div></div>')+
+  '</div></div>'+
+
+  '<div class="card"><div class="card-title">⚠️ Not Submitted Today <span class="badge br">'+S.data.notSubmitted.length+'</span></div>'+
+  (S.data.notSubmitted.length?
+    '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
+    S.data.notSubmitted.map(function(e){return '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:6px 12px;font-size:12px"><b>'+e.name+'</b> <span style="color:var(--text3)">'+e.brand+'</span></div>';}).join('')+
+    '</div>'
+    :'<div style="color:#34d399;font-size:13px;padding:8px">✅ All employees submitted today!</div>')+
+  '</div>';
+
+  setTimeout(function(){
+    mkChart('cTrend','line',tDates,[{data:tDates.map(function(d){return dm[d]||0;}),borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.1)',tension:0.5,pointRadius:4,fill:true,borderWidth:2}],{scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(255,255,255,.4)',font:{size:9},maxTicksLimit:7}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(255,255,255,.4)',font:{size:9}},beginAtZero:true}}});
+  },100);
 }
 function renderSalesOrders(){var pg=document.getElementById('pg-salesOrders');if(!pg)return;if(S.user.role==='Sales'&&!S.user.isAdmin){renderSalesOrderForm(pg);return;}var title=S.user.isAdmin?'All Orders':S.user.role==='Confirmation'?'Orders to Confirm':'Orders Queue';pg.innerHTML='<div class="pg-hdr"><div class="pg-title">'+title+'</div></div><div class="fbar"><span class="fl">Status:</span><select class="fsel" id="soStatusF" onchange="loadSalesOrdersTable()"><option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option><option>Label Generated</option><option>Dispatched</option><option>Out for Delivery</option><option>Delivered</option><option>RTO</option></select><span class="fl">Date:</span><input type="text" class="fsel" id="soDateF" placeholder="dd-mm-yyyy" style="min-width:120px"><button class="btn btn-p" onclick="loadSalesOrdersTable()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'soStatusF\').value=\'\';document.getElementById(\'soDateF\').value=\'\';loadSalesOrdersTable()">Reset</button></div><div id="soTableWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div>';loadSalesOrdersTable();}
 function loadSalesOrdersTable(){var statusF=document.getElementById('soStatusF')?document.getElementById('soStatusF').value:'';var dateF=document.getElementById('soDateF')?document.getElementById('soDateF').value:'';var el=document.getElementById('soTableWrap');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(orders){if(!orders.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>No orders found</div></div>';return;}var canConfirm=S.user.isAdmin||S.user.role==='Confirmation';var canLabel=S.user.isAdmin||S.user.role==='DataEntry';var h='<div class="table-wrap"><div class="table-hdr"><div class="table-title">Orders</div><div class="table-badge">'+orders.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Series</th><th>Date</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th></tr></thead><tbody>';orders.forEach(function(o){var actions='';if(canConfirm&&o.status==='Pending'){actions+='<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:4px">Confirm</button><button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Reject</button>';}if(canLabel&&o.status==='Confirmed'){actions+='<button onclick="assignEYUI(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">Assign EY</button>';}if(canLabel&&o.status==='Label Generated'){actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Dispatch</button>';}if((S.user.isAdmin||S.user.role==='DataEntry')&&(o.status==='Dispatched'||o.status==='Out for Delivery')){actions+='<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-right:4px">OFD</button><button onclick="markDeliveredUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Delivered</button>';}if(S.user.isAdmin){actions+='<button onclick="deleteSalesOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-top:4px">Delete</button>';}h+='<tr><td style="font-weight:700;color:#818cf8">#'+o.series+'</td><td>'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td style="color:#818cf8">'+o.phone+'</td><td>'+o.grams+'gm</td><td style="font-weight:800;color:#34d399">'+fnr(o.finalPrice)+(o.discount>0?'<div style="font-size:9px;color:#f87171">-'+fnr(o.discount)+'</div>':'')+'</td><td><span class="badge '+(o.paymentType==='COD'?'bc':'by')+'">'+o.paymentType+'</span>'+(o.advanceRequired==='Yes'?'<span class="badge br" style="margin-left:4px;font-size:9px">ADV</span>':'')+'</td><td style="font-size:10px;color:#22d3ee">'+(o.eyNumber||'-')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td style="white-space:nowrap">'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({status:statusF,date:dateF});}
 function renderSalesOrderForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">New Sales Order</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Customer Name *</label><input type="text" class="input" id="soName" placeholder="Customer name"></div><div class="fcol"><label class="label">Phone *</label><input type="text" class="input" id="soPhone" placeholder="Phone number"></div></div><div id="soDupWarn"></div><div class="fcol"><label class="label">Address *</label><textarea class="textarea" id="soAddress" rows="2" placeholder="Full delivery address"></textarea></div><div class="frow"><div class="fcol"><label class="label">Pincode *</label><input type="text" class="input" id="soPincode" placeholder="6-digit pincode" oninput="if(this.value.length===6)lookupPincodeUI()"><div id="pincodeStatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div><div class="fcol"><label class="label">Post Office *</label><select class="select" id="soPostOffice"><option value="">-- Fetch by Pincode --</option></select><div style="margin-top:6px"><input type="text" class="input" id="manualPO" placeholder="Or type post office name manually" oninput="syncManualPO(this.value)"></div></div></div><input type="hidden" id="soState"><div class="frow"><div class="fcol"><label class="label">Grams *</label><select class="select" id="soGrams" onchange="updatePricing()"><option value="">-- Select --</option>'+Object.keys(PRICES).map(function(g){return '<option value="'+g+'">'+(g=='1000'?'1kg':g+'gm')+'</option>';}).join('')+'</select></div><div class="fcol"><label class="label">Bottle Option</label><select class="select" id="soMultiple" onchange="updatePricing()"><option value="0">Direct Size</option><option value="1">Multiple Bottles (discount)</option></select></div></div><div id="soPriceCard"></div><div class="frow"><div class="fcol"><label class="label">Payment Type</label><select class="select" id="soPayType" onchange="toggleScreenshot()"><option value="COD">COD</option><option value="Prepaid">Prepaid</option><option value="Advance">Advance</option></select></div></div><div id="soScreenshotWrap" style="display:none"><div class="fcol"><label class="label">Payment Screenshot URL *</label><input type="text" class="input" id="soScreenshot" placeholder="Paste screenshot URL"></div></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="soNotes" placeholder="Optional"></div><button class="btn btn-p btn-full" id="soSubmitBtn" onclick="submitSalesOrderUI()" style="padding:13px">Submit Order</button><div id="soStatus"></div></div><div class="card"><div class="card-title">My Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myOrdersWrap"><div class="empty-state"><div>Click Load</div></div></div></div>';}
 function lookupPincodeUI(){var pin=document.getElementById('soPincode').value.trim();if(pin.length!==6)return;var st=document.getElementById('pincodeStatus');var sel=document.getElementById('soPostOffice');if(st)st.textContent='Fetching...';google.script.run.withSuccessHandler(function(r){if(!r.success){if(st)st.textContent='Not found';return;}document.getElementById('soState').value=r.state||'';if(st)st.textContent=r.district+', '+r.state;if(sel){sel.innerHTML='<option value="">-- Select post office --</option>'+r.offices.map(function(o){return '<option value="'+o.name+'">'+o.name+(o.branchType?' ('+o.branchType+')':'')+'</option>';}).join('');}}).lookupPincode(pin);}
-function updatePricing(){var grams=parseInt(document.getElementById('soGrams').value)||0;var useMultiple=document.getElementById('soMultiple').value==='1';var el=document.getElementById('soPriceCard');if(!el)return;if(!grams){el.innerHTML='';return;}var p=calcPricing(grams,useMultiple);if(!p){el.innerHTML='';return;}var discountLine=p.discount>0?'<div class="price-row"><span style="color:#f87171">Discount ('+(p.boxes.indexOf(200)!==-1?'15%':'20%')+')</span><span class="discount-tag">-'+fnr(p.discount)+'</span></div>':'';el.innerHTML='<div class="price-card"><div class="price-row"><span>Selling Price</span><span>'+fnr(p.selling)+'</span></div>'+discountLine+'<div class="price-row" style="border-top:1px solid rgba(99,102,241,.3)"><span style="font-weight:800">Final Amount</span><span class="price-total">'+fnr(p.finalPrice)+'</span></div><div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text3)"><span>Boxes: <b style="color:var(--text)">'+p.labelText+'</b></span><span>Weight: <b style="color:var(--text)">'+p.weight+'g</b></span></div></div>';}
+function updatePricing(){var grams=parseInt(document.getElementById('soGrams').value)||0;var useMultiple=document.getElementById('soMultiple').value==='1';var el=document.getElementById('soPriceCard');if(!el)return;if(!grams){el.innerHTML='';return;}var p=calcPricing(grams,useMultiple);if(!p){el.innerHTML='';return;}var discountLine=p.discount>0?'<div class="price-row"><span style="color:#f87171">Discount ('+(p.boxes.indexOf(200)!==-1?'15%':'20%')+')</span><span class="discount-tag">-'+fnr(p.discount)+'</span></div>':'';var payType=document.getElementById('soPayType')?document.getElementById('soPayType').value:'COD';
+    var codLine=payType==='COD'?'<div class="price-row"><span style="color:#f87171">COD Charge</span><span style="color:#f87171">+'+fnr(p.codCharge)+'</span></div>':'';
+    var prepaidLine=payType==='Prepaid'?'<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:6px 10px;margin-top:6px;font-size:11px;color:#34d399">✅ Prepaid — No COD charge. Incentive: ₹20</div>':'';
+    el.innerHTML='<div class="price-card"><div class="price-row"><span>Selling Price</span><span>'+fnr(p.selling)+'</span></div>'+discountLine+codLine+'<div class="price-row" style="border-top:1px solid rgba(249,115,22,.3)"><span style="font-weight:800">Final Amount</span><span class="price-total">'+fnr(p.finalPrice)+'</span></div><div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text3)"><span>Boxes: <b style="color:var(--text)">'+p.labelText+'</b></span><span>Weight: <b style="color:var(--text)">'+p.weight+'g</b></span></div>'+prepaidLine+'</div>';}
 function toggleScreenshot(){var val=document.getElementById('soPayType').value;var wrap=document.getElementById('soScreenshotWrap');if(wrap)wrap.style.display=val==='Advance'?'block':'none';}
 
 function editOrderUI(orderId){
@@ -1044,28 +1104,102 @@ function printLabelUI(orderId){google.script.run.withSuccessHandler(function(lab
 function showLabelPreview(d){
   var el=document.getElementById('labelPrintArea');if(!el)return;
   var isCOD=d.paymentType==='COD';
-  var lh='<div id="printableLabel" style="background:white;color:black;font-family:Arial,sans-serif;width:380px;border:2px solid #000;padding:0;margin:0;font-size:11px;">';
-  lh+='<div style="background:#fff;border-bottom:2px solid #000;padding:8px 10px;text-align:center;font-weight:900;font-size:12px;">'+(isCOD?'Cash On Delivery for Rs '+fn(d.codAmount)+' ('+numberToWords(d.codAmount)+')':'ADVANCE PAID')+'</div>';
-  lh+='<div style="display:flex;border-bottom:1px solid #000;">';
-  lh+='<div style="flex:1;padding:8px 10px;border-right:1px solid #000;">';
-  lh+='<svg id="labelBarcode" style="width:100%;height:50px;"></svg>';
-  lh+='<div style="text-align:center;font-weight:900;font-size:13px;margin-top:4px;">'+d.eyNumber+'</div>';
-  lh+='<div style="margin-top:6px;font-size:10px"><b>Weight:</b> '+d.weight+'g &nbsp; <b>Vol:</b> '+d.volWeight+'g</div>';
-  lh+='<div style="margin-top:4px"><b>Ref:</b> '+d.refNo+'</div>';
-  lh+='<div style="margin-top:8px;font-size:10px;"><b>From,</b><br>'+d.from.name+'<br>'+d.from.city+' '+d.from.phone+'<br>COSTUMER ID:'+d.from.custId+'<br>CONTRACT ID:'+d.from.contractId+' PIN:'+d.from.pin+'</div>';
+  var isPrepaid=d.paymentType==='Prepaid'||d.paymentType==='Advance';
+
+  // India Post official logo SVG (horn/bugle design)
+  var ipLogo='<svg width="48" height="48" viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">'+
+    '<rect width="120" height="80" fill="white"/>'+
+    // Horn shape
+    '<path d="M10 50 Q20 20 60 15 Q90 12 105 30 Q115 42 108 55 Q100 65 85 62 Q70 60 65 50 Q55 38 40 42 Q28 46 25 55 Z" fill="#dc2626" stroke="#8B0000" stroke-width="1"/>'+
+    '<path d="M25 55 Q30 45 40 42 Q52 40 60 48 Q55 62 42 65 Q30 66 25 55 Z" fill="#fbbf24"/>'+
+    // Flag lines
+    '<line x1="105" y1="30" x2="115" y2="15" stroke="#dc2626" stroke-width="3"/>'+
+    '<line x1="108" y1="28" x2="118" y2="18" stroke="#dc2626" stroke-width="2"/>'+
+    '<text x="60" y="76" fill="#dc2626" font-size="9" font-weight="900" font-family="Arial" text-anchor="middle">India Post</text>'+
+    '</svg>';
+
+  var lh='<div id="printableLabel" style="background:white;color:black;font-family:Arial,sans-serif;width:680px;border:1.5px solid #000;padding:0;margin:0;font-size:11px">';
+
+  // ═══ COD HEADER (only for COD) ═══
+  if(isCOD){
+    lh+='<div style="border-bottom:1.5px solid #000;padding:7px 14px;text-align:center;font-weight:700;font-size:12px">Cash On Delivery for Rs '+fn(d.codAmount)+' ('+numberToWords(d.codAmount)+' Only)</div>';
+  }
+
+  // ═══ MAIN BODY ═══
+  lh+='<div style="display:flex;min-height:200px">';
+
+  // ─── LEFT COLUMN ───
+  lh+='<div style="width:320px;flex-shrink:0;padding:10px 12px;border-right:1.5px solid #000">';
+
+  // Barcode + India Post logo in same row
+  lh+='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">';
+  lh+='<div style="flex:1"><svg id="labelBarcode" style="width:220px;height:52px"></svg></div>';
+  lh+='<div style="flex-shrink:0;margin-left:8px">'+ipLogo+'</div>';
   lh+='</div>';
-  lh+='<div style="flex:1;padding:8px 10px;">';
-  lh+=(isCOD?'<div style="text-align:center;font-weight:900;font-size:13px;border-bottom:1px solid #000;padding-bottom:6px;margin-bottom:6px;">CASH ON DELIVERY</div>':'');
+
+  // EY Number
+  lh+='<div style="font-weight:900;font-size:13px;letter-spacing:1px;margin-bottom:6px">'+d.eyNumber+'</div>';
+
+  // Weight line
+  lh+='<div style="margin-bottom:4px"><b>Weight:</b> '+d.weight+' grams &nbsp;&nbsp; <b>Vol Weight:</b> '+d.volWeight+'grams</div>';
+
+  // Ref
+  lh+='<div style="margin-bottom:8px"><b>Ref:</b> '+d.refNo+'</div>';
+
+  // Divider
+  lh+='<div style="border-top:1px solid #000;margin-bottom:8px"></div>';
+
+  // From
+  lh+='<div style="margin-bottom:4px"><b>From,</b></div>';
+  lh+='<div>'+d.from.name+','+d.from.city+'</div>';
+  lh+='<div>'+d.from.phone+'</div>';
+  lh+='<div>COSTUMER ID:'+d.from.custId+'</div>';
+  lh+='<div>CONTRACT ID:'+d.from.contractId+' PIN:'+d.from.pin+'</div>';
+  lh+='<div style="margin-top:8px">🙏 PLEASE CALL CUSTOMER ON DELIVERY 🙏</div>';
+  lh+='</div>';
+
+  // ─── RIGHT COLUMN ───
+  lh+='<div style="flex:1;padding:10px 12px">';
+
+  if(isCOD){
+    lh+='<div style="text-align:center;font-weight:900;font-size:13px;text-decoration:underline;margin-bottom:10px">CASH ON DELIVERY</div>';
+  }
+
+  // To
   lh+='<div><b>To,</b></div>';
-  lh+='<div style="font-size:13px;font-weight:700;margin-top:4px;">'+d.to.name+', '+d.to.series+'</div>';
-  lh+='<div style="margin-top:4px;line-height:1.5">'+d.to.address+'</div>';
-  lh+='<div style="margin-top:6px;color:#888;text-decoration:underline">'+d.to.postOffice+'</div>';
-  lh+='<div style="margin-top:6px;font-size:12px"><b>'+d.labelText+' CALL CUSTOMER ON DELIVERY</b></div>';
-  lh+='<div style="margin-top:8px;border:1px solid #000;padding:4px;text-align:center"><b>'+d.to.postOffice.toUpperCase()+' - PIN: '+d.to.pincode+'</b></div>';
-  lh+='<div style="margin-top:6px;font-weight:700">PH: '+d.to.phone+'</div>';
-  lh+='</div></div></div>';
-  el.innerHTML='<div class="card" style="margin-top:18px"><div class="card-title">Label Preview<button onclick="triggerPrint()" class="btn btn-g" style="padding:7px 16px;font-size:12px">Print</button></div>'+lh+'</div>';
-  setTimeout(function(){try{JsBarcode('#labelBarcode',d.eyNumber,{format:'CODE128',width:1.5,height:40,displayValue:false,margin:0});}catch(e){}},100);
+  lh+='<div style="font-size:13px;margin-top:4px">'+d.to.name+', '+d.to.series+'</div>';
+  lh+='<div style="margin-top:4px;line-height:1.7;font-size:12px">'+d.to.address+'</div>';
+
+  // Post office (underlined, shown twice like in original)
+  lh+='<div style="margin-top:6px;text-decoration:underline;font-size:12px">'+d.to.postOffice+'</div>';
+
+  // Product + call to action
+  lh+='<div style="margin-top:8px;font-size:12px">'+d.labelText+' 🙏 CALL CUSTOMER ON DELIVERY</div>';
+
+  // PIN bold
+  lh+='<div style="margin-top:8px;font-weight:900;font-size:13px">'+d.to.postOffice.toUpperCase()+' - PIN: '+d.to.pincode+'</div>';
+
+  // Phone
+  lh+='<div style="margin-top:6px;font-size:12px">PH: '+d.to.phone+'</div>';
+
+  lh+='</div>';
+  lh+='</div>'; // end flex
+  lh+='</div>'; // end label
+
+  el.innerHTML='<div class="card" style="margin-top:18px">'+
+    '<div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
+    '🏷️ Label Preview — #'+d.series+
+    '<div style="display:flex;gap:8px">'+
+    '<button onclick="triggerPrint()" class="btn btn-g" style="padding:7px 16px;font-size:12px">🖨️ Print Label</button>'+
+    '</div></div>'+
+    '<div style="overflow-x:auto;padding:8px 0">'+lh+'</div>'+
+    '</div>';
+
+  setTimeout(function(){
+    try{
+      JsBarcode('#labelBarcode',d.eyNumber,{format:'CODE128',width:2,height:48,displayValue:false,margin:0});
+    }catch(e){console.error('Barcode error:',e);}
+  },150);
 }
 function triggerPrint(){window.print();}
 function renderEYManage(){var pg=document.getElementById('pg-eyManage');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">EY Number Management</div></div><div class="g2"><div class="card"><div class="card-title">Add EY Batch</div><div class="fcol"><label class="label">EY Numbers (one per line)</label><textarea class="textarea" id="eyBatchInput" rows="8" placeholder="EY067787332IN"></textarea></div><button class="btn btn-p btn-full" onclick="addEYBatchUI()" style="padding:12px">Add Batch</button><div id="eyBatchStatus"></div></div><div class="card"><div class="card-title">EY Stock</div><div id="eyStatsWrap"><div class="loading"><div class="spin-sm"></div></div></div></div></div>';loadEYStats();}
@@ -1146,7 +1280,7 @@ function handleLeave(reqId,action){
 }
 function deleteLeaveUI(reqId){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success)loadAdminLeaves();}).deleteLeave(reqId);}
 function renderSalary(){var pg=document.getElementById('pg-salary');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Salary</div></div><div class="g2"><div class="card"><div class="card-title">Individual Slip</div><div class="fcol"><label class="label">Employee</label><select class="select" id="salEmpF"></select></div><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="salMonF"></div><button class="btn btn-p btn-full" onclick="calcOneSal()" style="padding:12px;margin-top:6px">Calculate</button><div id="salResult"></div></div><div class="card"><div class="card-title">Payroll</div><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="adminSalMon"></div><button class="btn btn-p btn-full" onclick="loadAllSal()" style="padding:12px;margin-top:6px">Generate</button><div id="allSalResult"></div></div></div>';populateFilters();}
-function calcOneSal(){var empId=document.getElementById('salEmpF')?document.getElementById('salEmpF').value:'';var month=document.getElementById('salMonF')?document.getElementById('salMonF').value:'';if(!empId||!month){var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="err-msg">Select employee and month</div>';return;}var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation '+fnr(r.basic)+'</span>':'<span class="perm-badge">Permanent '+fnr(r.basic)+'</span>';var h='<div style="background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:16px;margin-top:12px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="sal-row"><span>Work Days ('+r.fullDays+'f+'+r.halfDays+'h)</span><span style="color:#818cf8">'+r.workDays+'d</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(99,102,241,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-weight:800;color:#34d399;font-size:16px">'+fnr(r.grossWithTea)+'</span></div></div>';if(el)el.innerHTML=h;}).calcSalary(empId,month,true);}
+function calcOneSal(){var empId=document.getElementById('salEmpF')?document.getElementById('salEmpF').value:'';var month=document.getElementById('salMonF')?document.getElementById('salMonF').value:'';if(!empId||!month){var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="err-msg">Select employee and month</div>';return;}var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation '+fnr(r.basic)+'</span>':'<span class="perm-badge">Permanent '+fnr(r.basic)+'</span>';var h='<div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:var(--r2);padding:16px;margin-top:12px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="sal-row"><span>Work Days ('+r.fullDays+'f+'+r.halfDays+'h)</span><span style="color:#818cf8">'+r.workDays+'d</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(99,102,241,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-weight:800;color:#34d399;font-size:16px">'+fnr(r.grossWithTea)+'</span></div></div>';if(el)el.innerHTML=h;}).calcSalary(empId,month,true);}
 function loadAllSal(){var month=document.getElementById('adminSalMon')?document.getElementById('adminSalMon').value:'';if(!month){var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="err-msg">Select month</div>';return;}var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No data</div></div>';return;}var total=rows.reduce(function(s,r){return s+r.gross;},0);var h='<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:12px;margin-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">'+rows.length+' employees</span><span style="font-size:18px;font-weight:800;color:#34d399">'+fnr(total)+'</span></div><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>#</th><th>Employee</th><th>Status</th><th>Orders</th><th>Days</th><th>Gross</th></tr></thead><tbody>';rows.forEach(function(r,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+r.name+'</td><td>'+(r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>')+'</td><td>'+fn(r.totalOrders)+'</td><td>'+r.workDays+'d</td><td style="font-weight:800;color:#34d399">'+fnr(r.gross)+'</td></tr>';});h+='</tbody></table></div>';if(el)el.innerHTML=h;}).getAllSalaries(month);}
 function renderCustomers(){var pg=document.getElementById('pg-customers');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Customers</div></div>'+(S.user.isAdmin?'<div class="card"><div class="card-title">Import from Sheet</div><div style="display:flex;gap:8px;flex-wrap:wrap"><select class="select" id="importSheetSel" style="min-width:200px"><option value="">-- Select --</option></select><button class="btn btn-s" onclick="loadSheetList()">Refresh</button><input type="text" class="input" id="importSheetManual" placeholder="Or type name" style="max-width:200px"><button class="btn btn-p" onclick="runBulkImport()">Import</button></div><div id="importStatus"></div></div>':'')+' <div class="fbar"><input type="text" class="fsel" id="custSearch" placeholder="Search..." style="min-width:240px" oninput="loadCustTable()"></div><div id="custTableWrap"><div class="loading"><div class="spin-sm"></div></div></div>';if(S.user.isAdmin)loadSheetList();loadCustTable();}
 function loadSheetList(){google.script.run.withSuccessHandler(function(sheets){var el=document.getElementById('importSheetSel');if(!el)return;el.innerHTML='<option value="">-- Select --</option>'+sheets.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');}).getAvailableSheets();}
@@ -1198,85 +1332,230 @@ function renderMyLeave(){var pg=document.getElementById('pg-myLeave');if(!pg)ret
 function calcLvDays(){var from=document.getElementById('lvFrom').value,to=document.getElementById('lvTo').value;if(!from||!to)return;var d1=new Date(from),d2=new Date(to);if(d2<d1){document.getElementById('lvDays').style.display='none';return;}var days=Math.round((d2-d1)/(1000*60*60*24))+1;document.getElementById('lvDaysCount').textContent=days;document.getElementById('lvDays').style.display='block';}
 function submitLeave(){var from=document.getElementById('lvFrom').value,to=document.getElementById('lvTo').value,reason=document.getElementById('lvReason').value.trim();var leaveType=document.getElementById('lvType').value;var st=document.getElementById('lvStatus');if(!from||!to||!reason){if(st)st.innerHTML='<div class="err-msg">Fill all fields</div>';return;}var d1=new Date(from),d2=new Date(to);if(d2<d1){if(st)st.innerHTML='<div class="err-msg">Invalid dates</div>';return;}var days=Math.round((d2-d1)/(1000*60*60*24))+1;if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Submitted! ID: '+r.reqId+'</div>';['lvFrom','lvTo','lvReason'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('lvDays').style.display='none';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).applyLeave({empId:S.user.empId,empName:S.user.name,leaveType:leaveType,fromDate:from.split('-').reverse().join('-'),toDate:to.split('-').reverse().join('-'),days:days,reason:reason});}
 function loadMyLeaveHist(){var el=document.getElementById('myLeaveHist');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No requests</div></div>';return;}var h='';rows.forEach(function(r){var sC=r.status==='Approved'?'#34d399':r.status==='Rejected'?'#f87171':'#fcd34d';h+='<div style="border-left:3px solid '+sC+';padding:10px;margin-bottom:8px;background:rgba(255,255,255,.02);border-radius:0 var(--r) var(--r) 0"><div style="display:flex;justify-content:space-between"><span style="font-weight:700">'+r.leaveType+'</span><span style="color:'+sC+';font-size:11px">'+r.status+'</span></div><div style="font-size:11px;color:var(--text3)">'+r.fromDate+' to '+r.toDate+' ('+r.days+' days)</div></div>';});if(el)el.innerHTML=h;}).getLeaves(S.user.empId,false);}
-function renderConfirmation(){var pg=document.getElementById('pg-confirmation');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Confirmation Dashboard</div></div><div class="g2"><div class="card"><div class="card-title">Log Today Count</div><div class="frow"><div class="fcol"><label class="label">Confirmed</label><input type="number" class="input" id="confConfirmed" placeholder="0" min="0"></div><div class="fcol"><label class="label">Pending</label><input type="number" class="input" id="confPending" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">Rejected</label><input type="number" class="input" id="confRejected" placeholder="0" min="0"></div><div class="fcol"><label class="label">Total Calls</label><input type="number" class="input" id="confTotalCalled" placeholder="0" min="0"></div></div><button class="btn btn-p btn-full" onclick="submitConfCount()" style="padding:12px">Submit Count</button><div id="confCountStatus"></div></div><div class="card"><div class="card-title">Today Stats</div><div id="confTodayStats"><div class="loading"><div class="spin-sm"></div></div></div></div></div><div class="card"><div class="card-title">Customer Lookup</div><div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" class="input" id="confPhone" placeholder="Phone number"><button class="btn btn-p" onclick="lookupCustomerUI()">Lookup</button></div><div id="custLookupResult"></div></div><div class="fbar"><span class="fl">Date:</span><input type="text" class="fsel" id="confDateF" placeholder="dd-mm-yyyy"><button class="btn btn-s" onclick="loadConfHistory()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'confDateF\').value=\'\';loadConfHistory()">All</button></div><div id="confHistory"></div>';loadConfTodayStats();loadConfHistory();}
-function submitConfCount(){var st=document.getElementById('confCountStatus');var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,confirmed:Number(document.getElementById('confConfirmed').value)||0,pending:Number(document.getElementById('confPending').value)||0,rejected:Number(document.getElementById('confRejected').value)||0,totalCalled:Number(document.getElementById('confTotalCalled').value)||0,notes:''};if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Logged!</div>';['confConfirmed','confPending','confRejected','confTotalCalled'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});loadConfTodayStats();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).submitConfirmationDailyCount(data);}
-function loadConfTodayStats(){var el=document.getElementById('confTodayStats');google.script.run.withSuccessHandler(function(d){if(!el)return;el.innerHTML='<div class="g4"><div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:12px;text-align:center"><div style="font-size:22px;font-weight:800;color:#34d399">'+d.todayConfirmed+'</div><div style="font-size:9px;color:var(--text3)">Confirmed</div></div><div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:12px;text-align:center"><div style="font-size:22px;font-weight:800;color:#fcd34d">'+d.todayPending+'</div><div style="font-size:9px;color:var(--text3)">Pending</div></div><div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:var(--r);padding:12px;text-align:center"><div style="font-size:22px;font-weight:800;color:#f87171">'+d.todayRejected+'</div><div style="font-size:9px;color:var(--text3)">Rejected</div></div><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r);padding:12px;text-align:center"><div style="font-size:22px;font-weight:800;color:#818cf8">'+(d.todayConfirmed+d.todayPending+d.todayRejected)+'</div><div style="font-size:9px;color:var(--text3)">Total</div></div></div>';}).getConfirmationDashData(S.user.empId,S.user.isAdmin);}
-function lookupCustomerUI(){var phone=document.getElementById('confPhone').value.trim();var el=document.getElementById('custLookupResult');if(!phone){if(el)el.innerHTML='<div class="err-msg">Enter phone</div>';return;}if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r.found){if(el)el.innerHTML='<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:12px;color:#fcd34d">New Customer</div>';return;}if(el)el.innerHTML='<div style="background:'+(r.advanceRequired?'rgba(239,68,68,.1)':'rgba(16,185,129,.1)')+';border:1px solid '+(r.advanceRequired?'rgba(239,68,68,.3)':'rgba(16,185,129,.3)')+';border-radius:var(--r);padding:12px"><div style="font-weight:800">'+r.name+(r.advanceRequired?' - COLLECT ADVANCE':'')+'</div><div style="font-size:11px;margin-top:4px;color:var(--text2)">Orders: '+r.totalOrders+' | Returns: '+r.returns+'</div><div style="display:flex;gap:6px;margin-top:8px"><span class="badge '+(r.isRepeat?'by':'bg')+'">'+(r.isRepeat?'Returning':'First Time')+'</span>'+(r.advanceRequired?'<span class="badge br">Advance Required</span>':'')+'</div></div>';}).lookupCustomer(phone);}
-function loadConfHistory(){var dateF=document.getElementById('confDateF')?document.getElementById('confDateF').value:'';var el=document.getElementById('confHistory');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(d){var counts=d.dailyCounts||[];if(dateF)counts=counts.filter(function(r){return r.date===dateF;});if(!counts.length){if(el)el.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Name</th><th>Confirmed</th><th>Pending</th><th>Rejected</th><th>Calls</th></tr></thead><tbody>';counts.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td style="color:#34d399;font-weight:800">'+r.confirmed+'</td><td style="color:#fcd34d">'+r.pending+'</td><td style="color:#f87171">'+r.rejected+'</td><td>'+r.totalCalled+'</td></tr>';});h+='</tbody></table></div></div>';if(el)el.innerHTML=h;}).getConfirmationDashData(S.user.empId,S.user.isAdmin);}
-function renderDataEntry(){var pg=document.getElementById('pg-dataentry');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Data Entry</div></div><div class="g2"><div class="card"><div class="card-title">Log Entry</div><div class="frow"><div class="fcol"><label class="label">Orders Entered</label><input type="number" class="input" id="deOrders" placeholder="0" min="0"></div><div class="fcol"><label class="label">Portal</label><select class="select" id="dePortal"><option>Shiprocket</option><option>Delhivery</option><option>BlueDart</option><option>Ecom Express</option><option>Other</option></select></div></div><div class="fcol"><label class="label">Notes</label><textarea class="textarea" id="deNotes" rows="2"></textarea></div><button class="btn btn-p btn-full" onclick="submitDELog()" style="padding:12px">Log</button><div id="deStatus"></div></div><div class="card"><div class="card-title">My Stats</div><div id="deTodayStats"><div class="loading"><div class="spin-sm"></div></div></div></div></div><div class="card"><div class="card-title">History <button class="btn btn-s" onclick="loadDEHistory()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="deHistory"><div class="empty-state"><div>Click Load</div></div></div></div>';loadDETodayStats();}
-function submitDELog(){var orders=Number(document.getElementById('deOrders').value)||0;var st=document.getElementById('deStatus');if(!orders){if(st)st.innerHTML='<div class="err-msg">Enter count</div>';return;}google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Logged!</div>';document.getElementById('deOrders').value='';document.getElementById('deNotes').value='';loadDETodayStats();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).submitDataEntryLog({date:todayStr(),empId:S.user.empId,empName:S.user.name,ordersEntered:orders,portal:document.getElementById('dePortal').value,notes:document.getElementById('deNotes').value.trim()});}
-function loadDETodayStats(){var el=document.getElementById('deTodayStats');google.script.run.withSuccessHandler(function(d){if(!el)return;el.innerHTML='<div class="g2"><div style="text-align:center;padding:14px;background:rgba(99,102,241,.1);border-radius:var(--r)"><div style="font-size:28px;font-weight:800;color:#818cf8">'+fn(d.todayEntered)+'</div><div style="font-size:9px;color:var(--text3)">TODAY</div></div><div style="text-align:center;padding:14px;background:rgba(16,185,129,.1);border-radius:var(--r)"><div style="font-size:28px;font-weight:800;color:#34d399">'+fn(d.totalEntered)+'</div><div style="font-size:9px;color:var(--text3)">ALL TIME</div></div></div>';}).getDataEntryDashData(S.user.empId);}
-function loadDEHistory(){var el=document.getElementById('deHistory');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(d){if(!d.myLogs.length){if(el)el.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var h='<div class="table-scroll"><table><thead><tr><th>Date</th><th>Orders</th><th>Portal</th></tr></thead><tbody>';d.myLogs.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:800;color:#818cf8">'+r.ordersEntered+'</td><td><span class="badge bc">'+r.portal+'</span></td></tr>';});h+='</tbody></table></div>';if(el)el.innerHTML=h;}).getDataEntryDashData(S.user.empId);}
-function fmtD(d){
-  if(!d)return'-';
-  var s=String(d);
-  if(/^\d{2}-\d{2}-\d{4}$/.test(s))return s;
-  try{var dt=new Date(s);if(!isNaN(dt.getTime())){return String(dt.getDate()).padStart(2,'0')+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+dt.getFullYear();}}catch(e){}
-  return s;
+function renderConfirmation(){
+  var pg=document.getElementById('pg-confirmation');if(!pg)return;
+  var d=S.data||{};
+  var myConf=d.myConfData||{confirmed:0,pending:0,rejected:0,total:0};
+
+  pg.innerHTML=
+  '<div class="pg-hdr"><div class="pg-title">Confirmation</div><div class="pg-sub">Hi, '+S.user.name.split(' ')[0]+'</div></div>'+
+
+  // Stats
+  '<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+  '<div class="sc" style="--sc-col:#34d399"><div class="sl">Confirmed</div><div class="sv" style="color:#34d399">'+fn(myConf.confirmed||0)+'</div></div>'+
+  '<div class="sc" style="--sc-col:#f59e0b"><div class="sl">Pending</div><div class="sv" style="color:#fcd34d">'+fn(myConf.pending||0)+'</div></div>'+
+  '<div class="sc" style="--sc-col:#ef4444"><div class="sl">Rejected</div><div class="sv" style="color:#f87171">'+fn(myConf.rejected||0)+'</div></div>'+
+  '</div>'+
+
+  // Log count form
+  '<div class="card"><div class="card-title">📝 Log Today Count</div>'+
+  '<div class="frow"><div class="fcol"><label class="label">Confirmed</label><input type="number" class="input" id="confConfirmed" placeholder="0" min="0"></div>'+
+  '<div class="fcol"><label class="label">Pending</label><input type="number" class="input" id="confPending" placeholder="0" min="0"></div></div>'+
+  '<div class="frow"><div class="fcol"><label class="label">Rejected</label><input type="number" class="input" id="confRejected" placeholder="0" min="0"></div>'+
+  '<div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="confNotes" placeholder="Optional"></div></div>'+
+  '<button class="btn btn-p" onclick="submitConfCount()" style="margin-top:10px">Submit Count</button>'+
+  '<div id="confStatus"></div></div>'+
+
+  // Pending orders to confirm
+  '<div class="card"><div class="card-title">⏳ Orders to Confirm '+
+  '<button class="btn btn-s" onclick="loadConfPendingOrders()" style="padding:5px 12px;font-size:11px">Load</button></div>'+
+  '<div class="fbar"><select class="fsel" id="confPayF"><option value="">All Payment</option><option>COD</option><option>Prepaid</option><option>Advance</option></select>'+
+  '<input type="text" class="fsel" id="confSearch" placeholder="Search customer..." oninput="filterConfOrders()"></div>'+
+  '<div id="confOrdersWrap"><div class="empty-state"><div>Tap Load to see pending orders</div></div></div></div>';
+
+  // Auto-load pending orders
+  setTimeout(function(){loadConfPendingOrders();}, 300);
 }
 
-function buildOFDButtons(orderId,eyNum,custName,phone){
-  var d=document.createElement('div');d.className='ofd-update-row';
-  var responses=['Will Receive','Not Available','Wants to Cancel','Already Received'];
-  var classes=['ofd-btn-will','ofd-btn-na','ofd-btn-cancel','ofd-btn-done'];
-  var html='<span style="font-size:10px;color:var(--text3)">Call Update:</span>';
-  responses.forEach(function(r,i){
-    html+='<button class="ofd-resp-btn '+classes[i]+'" onclick="handleOFDBtn(this)" data-oid="'+orderId+'" data-ey="'+eyNum+'" data-cn="'+custName+'" data-ph="'+phone+'" data-resp="'+r+'">'+r+'</button>';
+function loadConfPendingOrders(){
+  var el=document.getElementById('confOrdersWrap');if(!el)return;
+  el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';
+  google.script.run
+    .withSuccessHandler(function(orders){
+      if(!orders||!orders.length){el.innerHTML='<div class="empty-state"><div>No pending orders</div></div>';return;}
+      var pending=orders.filter(function(o){return o.status==='Pending';});
+      if(!pending.length){el.innerHTML='<div class="empty-state" style="color:#34d399"><div>✅ All orders confirmed!</div></div>';return;}
+      el.setAttribute('data-orders',JSON.stringify(pending));
+      renderConfOrders(pending);
+    })
+    .getSalesOrders({status:'Pending'});
+}
+
+function filterConfOrders(){
+  var raw=document.getElementById('confOrdersWrap').getAttribute('data-orders');
+  if(!raw)return;
+  var orders=JSON.parse(raw);
+  var payF=document.getElementById('confPayF').value;
+  var search=document.getElementById('confSearch').value.toLowerCase();
+  if(payF)orders=orders.filter(function(o){return o.paymentType===payF;});
+  if(search)orders=orders.filter(function(o){return (o.customerName||'').toLowerCase().includes(search)||(o.phone||'').includes(search);});
+  renderConfOrders(orders);
+}
+
+function renderConfOrders(orders){
+  var el=document.getElementById('confOrdersWrap');if(!el)return;
+  if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders match filters</div></div>';return;}
+  var h='<div class="table-scroll"><table><thead><tr>'+
+    '<th>#</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>Agent</th><th>Actions</th>'+
+    '</tr></thead><tbody>';
+  orders.forEach(function(o){
+    var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+    h+='<tr>'+
+      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
+      '<td style="font-weight:700">'+o.customerName+'</td>'+
+      '<td style="color:var(--text3)">'+o.phone+'</td>'+
+      '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
+      '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
+      '<td><span class="badge '+payClr+'">'+o.paymentType+'</span>'+(o.paymentType==='Prepaid'?'<br><span style="font-size:9px;color:#34d399">✅ Paid</span>':'')+'</td>'+
+      '<td style="font-size:11px">'+o.empName+'</td>'+
+      '<td style="white-space:nowrap">'+
+      '<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 10px;font-size:10px;margin-right:4px">✓ Confirm</button>'+
+      '<button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 10px;font-size:10px">✗ Reject</button>'+
+      '</td></tr>';
   });
-  d.innerHTML=html;return d.outerHTML;
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
 }
 
-function handleOFDBtn(btn){
-  submitCallUpdate(btn.getAttribute('data-oid'),btn.getAttribute('data-ey'),btn.getAttribute('data-resp'),btn.getAttribute('data-cn'),btn.getAttribute('data-ph'),'');
+function submitConfCount(){
+  var g=function(id){var el=document.getElementById(id);return el?parseInt(el.value)||0:0;};
+  var confirmed=g('confConfirmed'),pending=g('confPending'),rejected=g('confRejected');
+  var notes=document.getElementById('confNotes')?document.getElementById('confNotes').value:'';
+  var st=document.getElementById('confStatus');
+  if(!confirmed&&!pending&&!rejected){if(st)st.innerHTML='<div class="err-msg">Enter at least one count</div>';return;}
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ Count submitted!</div>':'<div class="err-msg">'+r.msg+'</div>';
+      if(r.success){['confConfirmed','confPending','confRejected','confNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});}
+    })
+    .submitConfirmationDailyCount({empId:S.user.empId,empName:S.user.name,confirmed:confirmed,pending:pending,rejected:rejected,notes:notes,date:todayStr()});
+}
+function renderDataEntry(){
+  var pg=document.getElementById('pg-dataentry');if(!pg)return;
+  var d=S.data||{};
+  var deData=d.myDeData||{entered:0,labels:0,dispatched:0};
+
+  pg.innerHTML=
+  '<div class="pg-hdr"><div class="pg-title">Data Entry & Labels</div><div class="pg-sub">Hi, '+S.user.name.split(' ')[0]+'</div></div>'+
+
+  // Stats
+  '<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+  '<div class="sc" style="--sc-col:#f97316"><div class="sl">Entered Today</div><div class="sv" style="color:#fb923c">'+fn(deData.entered||0)+'</div></div>'+
+  '<div class="sc" style="--sc-col:#a78bfa"><div class="sl">Labels Today</div><div class="sv" style="color:#a78bfa">'+fn(deData.labels||0)+'</div></div>'+
+  '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Dispatched</div><div class="sv" style="color:#22d3ee">'+fn(deData.dispatched||0)+'</div></div>'+
+  '</div>'+
+
+  // Quick label actions
+  '<div class="card"><div class="card-title">🏷️ Label Queue '+
+  '<button class="btn btn-p" onclick="loadLabelQueue()" style="padding:5px 12px;font-size:11px">🔄 Refresh</button></div>'+
+  '<div class="fbar">'+
+  '<select class="fsel" id="lqPayF"><option value="">All Payment</option><option>COD</option><option>Prepaid</option><option>Advance</option></select>'+
+  '<input type="text" class="fsel" id="lqSearch" placeholder="Search..." oninput="filterLabelQueue()">'+
+  '</div>'+
+  '<div id="labelQueueWrap"><div class="loading"><div class="spin-sm"></div></div></div></div>'+
+
+  // EY Number batch add
+  '<div class="card"><div class="card-title">🔢 Add EY Numbers Batch</div>'+
+  '<div class="fcol"><label class="label">EY Numbers (one per line, format: EY123456789IN)</label>'+
+  '<textarea class="textarea" id="eyBatch" rows="5" placeholder="EY123456789IN | EY123456790IN | ..."></textarea></div>'+
+  '<button class="btn btn-p" onclick="submitEYBatch()" style="margin-top:10px">Add EY Numbers</button>'+
+  '<div id="eyBatchStatus"></div></div>'+
+
+  // Log entry
+  '<div class="card"><div class="card-title">📊 Log Daily Entry</div>'+
+  '<div class="frow">'+
+  '<div class="fcol"><label class="label">Orders Entered</label><input type="number" class="input" id="deOrders" placeholder="0" min="0"></div>'+
+  '<div class="fcol"><label class="label">Portal</label><select class="select" id="dePortal"><option>India Post</option><option>Shiprocket</option><option>Delhivery</option><option>Ecom Express</option></select></div>'+
+  '</div>'+
+  '<div class="frow">'+
+  '<div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="deNotes" placeholder="Optional"></div>'+
+  '</div>'+
+  '<button class="btn btn-p" onclick="submitDELog()" style="margin-top:10px">Submit Log</button>'+
+  '<div id="deStatus"></div></div>';
+
+  setTimeout(function(){loadLabelQueue();}, 300);
 }
 
-function loadNextEmpId(){
-  google.script.run.withSuccessHandler(function(nextId){
-    var el=document.getElementById('aeId');if(el&&!el.value)el.value=nextId;
-    var hint=document.getElementById('empIdHint');if(hint)hint.textContent='Next: '+nextId;
-  }).getNextEmployeeId();
+function loadLabelQueue(){
+  var el=document.getElementById('labelQueueWrap');if(!el)return;
+  el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';
+  google.script.run
+    .withSuccessHandler(function(orders){
+      var ready=orders.filter(function(o){return o.status==='Confirmed'||o.status==='Label Generated';});
+      el.setAttribute('data-lq',JSON.stringify(ready));
+      renderLabelQueueTable(ready);
+    })
+    .getSalesOrders({});
 }
 
-function syncManualPO(val){
-  var sel=document.getElementById('soPostOffice');
-  if(sel)sel.innerHTML='<option value="'+val+'">'+val+'</option>';
+function filterLabelQueue(){
+  var raw=document.getElementById('labelQueueWrap').getAttribute('data-lq');
+  if(!raw)return;
+  var orders=JSON.parse(raw);
+  var payF=document.getElementById('lqPayF').value;
+  var search=document.getElementById('lqSearch').value.toLowerCase();
+  if(payF)orders=orders.filter(function(o){return o.paymentType===payF;});
+  if(search)orders=orders.filter(function(o){return (o.customerName||'').toLowerCase().includes(search)||(o.phone||'').includes(search);});
+  renderLabelQueueTable(orders);
 }
 
-function sendChatMsg(){
-  var input=document.getElementById('chatInput');if(!input)return;
-  var msg=input.value.trim();if(!msg)return;
-  input.value='';
-  var msgs=document.getElementById('chatMessages');if(!msgs)return;
-  msgs.innerHTML+='<div class="chat-msg user">'+msg+'</div>';
-  var loadId='load'+Date.now();
-  msgs.innerHTML+='<div class="chat-msg bot loading" id="'+loadId+'">Looking up...</div>';
-  msgs.scrollTop=msgs.scrollHeight;
-  var phoneMatch=msg.match(/[6-9][0-9]{9}/);
-  if(phoneMatch){
-    var phone=phoneMatch[0];
-    google.script.run
-      .withSuccessHandler(function(r){
-        var el=document.getElementById(loadId);if(!el)return;
-        el.className='chat-msg bot';
-        if(!r.found){el.innerHTML='No orders found for <b>'+phone+'</b>. Customer has not placed any order yet.';return;}
-        var html='<b>'+r.customerName+'</b> ('+phone+') - '+r.totalOrders+' order(s):<br><br>';
-        r.orders.forEach(function(o){
-          var sc=o.status==='Delivered'?'#34d399':o.status==='Out for Delivery'?'#f87171':'#818cf8';
-          html+='<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px;margin-top:8px">';
-          html+='<div style="font-weight:700">Order #'+o.series+' <span style="color:'+sc+'">'+o.status+'</span></div>';
-          html+='<div style="margin-top:6px;font-size:12px;color:var(--text2)">EY: <b style="color:#22d3ee">'+(o.eyNumber||'Not assigned yet')+'</b><br>Amount: <b>'+fnr(o.finalPrice)+'</b> '+o.paymentType+'<br>Date: '+o.date+'</div></div>';
-        });
-        el.innerHTML=html;
-        msgs.scrollTop=msgs.scrollHeight;
-      })
-      .withFailureHandler(function(e){var el=document.getElementById(loadId);if(el){el.className='chat-msg bot';el.textContent='Error: '+e.message;}})
-      .getOrderByPhone(phone);
-  }else{
-    var el=document.getElementById(loadId);
-    if(el){el.className='chat-msg bot';el.textContent='Type a 10-digit customer phone number to look up their order and EY number.';}
-  }
+function renderLabelQueueTable(orders){
+  var el=document.getElementById('labelQueueWrap');if(!el)return;
+  if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders in label queue</div></div>';return;}
+  var h='<div class="table-scroll"><table><thead><tr>'+
+    '<th>#</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th>'+
+    '</tr></thead><tbody>';
+  orders.forEach(function(o){
+    var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+    var actions='';
+    if(o.status==='Confirmed'){
+      actions='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">EY+Label</button>';
+    } else if(o.status==='Label Generated'){
+      actions='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:3px">🖨️</button>'+
+              '<button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Dispatch</button>';
+    }
+    h+='<tr>'+
+      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
+      '<td style="font-weight:700">'+o.customerName+'</td>'+
+      '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
+      '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
+      '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
+      '<td><span class="badge '+payClr+'">'+o.paymentType+'</span></td>'+
+      '<td style="color:#22d3ee;font-size:11px;font-weight:700">'+(o.eyNumber||'<span style="color:var(--text3)">—</span>')+'</td>'+
+      '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td>'+
+      '<td style="white-space:nowrap">'+actions+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
 }
 
+function submitEYBatch(){
+  var raw=document.getElementById('eyBatch').value.trim();
+  var st=document.getElementById('eyBatchStatus');
+  if(!raw){if(st)st.innerHTML='<div class="err-msg">Enter EY numbers</div>';return;}
+  var nums=raw.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
+  if(!nums.length){if(st)st.innerHTML='<div class="err-msg">No valid EY numbers</div>';return;}
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Adding '+nums.length+' numbers...</div>';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ Added '+nums.length+' EY numbers!</div>':'<div class="err-msg">'+r.msg+'</div>';
+      if(r.success){var el=document.getElementById('eyBatch');if(el)el.value='';}
+    })
+    .addEYBatch(nums, S.user.empId);
+}
+
+function submitDELog(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var orders=parseInt(g('deOrders'))||0;
+  var st=document.getElementById('deStatus');
+  if(!orders){if(st)st.innerHTML='<div class="err-msg">Enter orders count</div>';return;}
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ Log submitted!</div>':'<div class="err-msg">'+r.msg+'</div>';
+      if(r.success){['deOrders','deNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});}
+    })
+    .submitDataEntryLog({empId:S.user.empId,empName:S.user.name,ordersEntered:orders,portal:g('dePortal'),notes:g('deNotes'),date:todayStr()});
+}
 function renderChatbot(){
   var pg=document.getElementById('pg-chatbot');if(!pg)return;
   pg.innerHTML=
@@ -1325,6 +1604,20 @@ var _origSwitch=switchPage;
 switchPage=function(id){_origSwitch(id);if(window.innerWidth<=640)closeSidebar();};
 
 
+
+
+function showToast(msg, type){
+  var existing=document.getElementById('crmToast');
+  if(existing)existing.remove();
+  var toast=document.createElement('div');
+  toast.id='crmToast';
+  var bg=type==='green'?'rgba(16,185,129,.9)':type==='red'?'rgba(239,68,68,.9)':'rgba(249,115,22,.9)';
+  toast.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:'+bg+';color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);animation:toastIn .3s ease';
+  toast.textContent=msg;
+  document.body.appendChild(toast);
+  setTimeout(function(){if(toast.parentNode)toast.style.opacity='0';},2500);
+  setTimeout(function(){if(toast.parentNode)toast.remove();},2800);
+}
 
 window.onload = function() {
   if (typeof makeChain === 'undefined') { location.reload(true); return; }

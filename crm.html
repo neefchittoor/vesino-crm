@@ -383,6 +383,29 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.025
 .badge.bi{background:rgba(239,68,68,.12)!important;color:#fca5a5!important;border-color:rgba(239,68,68,.25)!important}
 ::-webkit-scrollbar-thumb{background:rgba(239,68,68,.25)!important}
 
+
+/* ══ CRM BOT ══ */
+.bot-fab{position:fixed;bottom:24px;right:20px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#b91c1c,#f97316);border:none;cursor:pointer;box-shadow:0 4px 20px rgba(220,38,38,.45);z-index:500;display:flex;align-items:center;justify-content:center;font-size:22px;transition:transform .2s;color:white}
+.bot-fab:active{transform:scale(.92)}
+.bot-fab .bot-badge{position:absolute;top:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:#ef4444;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;color:white;border:2px solid var(--bg)}
+.bot-panel{position:fixed;bottom:88px;right:16px;width:320px;max-height:480px;background:var(--surface);border:1px solid var(--border2);border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:500;display:none;flex-direction:column;overflow:hidden}
+.bot-panel.open{display:flex}
+.bot-header{padding:14px 16px;background:linear-gradient(135deg,rgba(185,28,28,.3),rgba(249,115,22,.2));border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.bot-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#b91c1c,#f97316);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.bot-title{font-weight:800;font-size:13px;color:var(--text)}
+.bot-subtitle{font-size:10px;color:var(--text3)}
+.bot-close{margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0 4px}
+.bot-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:320px}
+.bot-msg{max-width:85%;padding:9px 12px;border-radius:14px;font-size:12px;line-height:1.5}
+.bot-msg.bot{background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.2);color:var(--text);border-radius:4px 14px 14px 14px}
+.bot-msg.user{background:linear-gradient(135deg,#b91c1c,#f97316);color:white;border-radius:14px 4px 14px 14px;align-self:flex-end}
+.bot-quick{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--border)}
+.bot-qbtn{background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#fb923c;padding:5px 10px;border-radius:20px;font-size:10px;cursor:pointer;font-weight:600;white-space:nowrap}
+.bot-qbtn:active{background:rgba(249,115,22,.25)}
+.bot-input-row{display:flex;gap:8px;padding:8px 12px;border-top:1px solid var(--border)}
+.bot-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:8px 12px;font-size:12px;color:var(--text);outline:none}
+.bot-send{background:linear-gradient(135deg,#b91c1c,#f97316);border:none;border-radius:50%;width:34px;height:34px;color:white;cursor:pointer;font-size:14px;flex-shrink:0}
+
 </style>
 </head>
 <body>
@@ -766,7 +789,27 @@ function closeSidebar() {
 
 
 var S={user:null,data:null,charts:{},SK:'vesino_crm_v10',timer:null};
-var PRICES={50:{selling:699,codCharge:60,weight:114,volWeight:147},100:{selling:899,codCharge:60,weight:192,volWeight:210},150:{selling:1249,codCharge:60,weight:306,volWeight:330},200:{selling:1399,codCharge:60,weight:310,volWeight:340},250:{selling:1749,codCharge:100,weight:424,volWeight:460},300:{selling:2049,codCharge:100,weight:502,volWeight:545},350:{selling:2399,codCharge:100,weight:616,volWeight:660},400:{selling:2649,codCharge:200,weight:620,volWeight:665},450:{selling:2999,codCharge:200,weight:734,volWeight:780},500:{selling:3149,codCharge:300,weight:812,volWeight:860},550:{selling:3499,codCharge:300,weight:926,volWeight:975},600:{selling:3649,codCharge:300,weight:930,volWeight:980},650:{selling:3999,codCharge:300,weight:1044,volWeight:1095},700:{selling:4099,codCharge:400,weight:1122,volWeight:1175},750:{selling:4349,codCharge:400,weight:1236,volWeight:1290},800:{selling:4499,codCharge:400,weight:1240,volWeight:1295},850:{selling:4649,codCharge:500,weight:1354,volWeight:1410},900:{selling:4799,codCharge:500,weight:1432,volWeight:1490},1000:{selling:5149,codCharge:500,weight:1620,volWeight:1680}};
+var PRICES={
+  50:{selling:699,codCharge:60,weight:114,length:14,breadth:9,height:7,volWeight:147},
+  100:{selling:899,codCharge:60,weight:192,length:14,breadth:9,height:7,volWeight:210},
+  150:{selling:1249,codCharge:60,weight:198,length:14,breadth:12,height:9,volWeight:330},
+  200:{selling:1399,codCharge:60,weight:310,length:14,breadth:12,height:9,volWeight:340},
+  250:{selling:1749,codCharge:100,weight:398,length:14,breadth:12,height:9,volWeight:460},
+  300:{selling:2049,codCharge:100,weight:466,length:14,breadth:12,height:9,volWeight:545},
+  350:{selling:2399,codCharge:100,weight:488,length:14,breadth:12,height:9,volWeight:545},
+  400:{selling:2649,codCharge:200,weight:498,length:14,breadth:12,height:9,volWeight:660},
+  450:{selling:2999,codCharge:200,weight:540,length:14,breadth:12,height:9,volWeight:660},
+  500:{selling:3149,codCharge:300,weight:810,length:14,breadth:12,height:9,volWeight:810},
+  550:{selling:3499,codCharge:300,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  600:{selling:3649,codCharge:300,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  650:{selling:3999,codCharge:300,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  700:{selling:4099,codCharge:400,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  750:{selling:4349,codCharge:400,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  800:{selling:4499,codCharge:400,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  850:{selling:4649,codCharge:500,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  900:{selling:4799,codCharge:500,weight:990,length:14,breadth:12,height:9,volWeight:990},
+  1000:{selling:5149,codCharge:500,weight:990,length:14,breadth:12,height:9,volWeight:990}
+};
 var BOTTLE_W={50:{weight:114,volWeight:147},100:{weight:192,volWeight:210},200:{weight:310,volWeight:340}};
 var PAGE_MAP={dashboard:'Dashboard',orders:'Daily Orders',enquiries:'Enquiries',performance:'Performance',returns:'Returns',attendance:'Attendance',leaves:'Leave Management',salary:'Salary',customers:'Customers',reports:'Reports',admin:'Administration',myDash:'My Dashboard',mySalary:'My Salary',myLeave:'My Leave',confirmation:'Confirmation',dataentry:'Data Entry',salesOrders:'Sales Orders',labelGen:'Label Generation',eyManage:'EY Number Management',ofdDash:'OFD Dashboard',chatbot:'Order Lookup'};
 function fn(n){return Number(n||0).toLocaleString('en-IN');}
@@ -816,6 +859,9 @@ function initApp(){
     var app=document.getElementById('app');if(app){app.style.display='flex';app.style.flexDirection='row';}
     setInterval(setLiveTime,60000);setLiveTime();
     var start=S.user.isAdmin?'dashboard':S.user.role==='Confirmation'?'confirmation':S.user.role==='DataEntry'?'dataentry':'myDash';
+    // Show bot only for Sales team
+    var botFab=document.getElementById('botFab');
+    if(botFab)botFab.style.display=(S.user.role==='Sales'&&!S.user.isAdmin)?'flex':'none';
     switchPage(start);S.timer=setInterval(refreshData,600000);
   });
 }
@@ -901,12 +947,89 @@ function renderDashboard(){
 }
 function renderSalesOrders(){var pg=document.getElementById('pg-salesOrders');if(!pg)return;if(S.user.role==='Sales'&&!S.user.isAdmin){renderSalesOrderForm(pg);return;}var title=S.user.isAdmin?'All Orders':S.user.role==='Confirmation'?'Orders to Confirm':'Orders Queue';pg.innerHTML='<div class="pg-hdr"><div class="pg-title">'+title+'</div></div><div class="fbar"><span class="fl">Status:</span><select class="fsel" id="soStatusF" onchange="loadSalesOrdersTable()"><option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option><option>Label Generated</option><option>Dispatched</option><option>Out for Delivery</option><option>Delivered</option><option>RTO</option></select><span class="fl">Date:</span><input type="text" class="fsel" id="soDateF" placeholder="dd-mm-yyyy" style="min-width:120px"><button class="btn btn-p" onclick="loadSalesOrdersTable()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'soStatusF\').value=\'\';document.getElementById(\'soDateF\').value=\'\';loadSalesOrdersTable()">Reset</button></div><div id="soTableWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div>';loadSalesOrdersTable();}
 function loadSalesOrdersTable(){var statusF=document.getElementById('soStatusF')?document.getElementById('soStatusF').value:'';var dateF=document.getElementById('soDateF')?document.getElementById('soDateF').value:'';var el=document.getElementById('soTableWrap');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(orders){if(!orders.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>No orders found</div></div>';return;}var canConfirm=S.user.isAdmin||S.user.role==='Confirmation';var canLabel=S.user.isAdmin||S.user.role==='DataEntry';var h='<div class="table-wrap"><div class="table-hdr"><div class="table-title">Orders</div><div class="table-badge">'+orders.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Series</th><th>Date</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th></tr></thead><tbody>';orders.forEach(function(o){var actions='';if(canConfirm&&o.status==='Pending'){actions+='<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:4px">Confirm</button><button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Reject</button>';}if(canLabel&&o.status==='Confirmed'){actions+='<button onclick="assignEYUI(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">Assign EY</button>';}if(canLabel&&o.status==='Label Generated'){actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Dispatch</button>';}if((S.user.isAdmin||S.user.role==='DataEntry')&&(o.status==='Dispatched'||o.status==='Out for Delivery')){actions+='<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-right:4px">OFD</button><button onclick="markDeliveredUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Delivered</button>';}if(S.user.isAdmin){actions+='<button onclick="deleteSalesOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-top:4px">Delete</button>';}h+='<tr><td style="font-weight:700;color:#818cf8">#'+o.series+'</td><td>'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td style="color:#818cf8">'+o.phone+'</td><td>'+o.grams+'gm</td><td style="font-weight:800;color:#34d399">'+fnr(o.finalPrice)+(o.discount>0?'<div style="font-size:9px;color:#f87171">-'+fnr(o.discount)+'</div>':'')+'</td><td><span class="badge '+(o.paymentType==='COD'?'bc':'by')+'">'+o.paymentType+'</span>'+(o.advanceRequired==='Yes'?'<span class="badge br" style="margin-left:4px;font-size:9px">ADV</span>':'')+'</td><td style="font-size:10px;color:#22d3ee">'+(o.eyNumber||'-')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td style="white-space:nowrap">'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({status:statusF,date:dateF});}
-function renderSalesOrderForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">New Sales Order</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Customer Name *</label><input type="text" class="input" id="soName" placeholder="Customer name"></div><div class="fcol"><label class="label">Phone *</label><input type="text" class="input" id="soPhone" placeholder="Phone number"></div></div><div id="soDupWarn"></div><div class="fcol"><label class="label">Address *</label><textarea class="textarea" id="soAddress" rows="2" placeholder="Full delivery address"></textarea></div><div class="frow"><div class="fcol"><label class="label">Pincode *</label><input type="text" class="input" id="soPincode" placeholder="6-digit pincode" oninput="if(this.value.length===6)lookupPincodeUI()"><div id="pincodeStatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div><div class="fcol"><label class="label">Post Office *</label><select class="select" id="soPostOffice"><option value="">-- Fetch by Pincode --</option></select><div style="margin-top:6px"><input type="text" class="input" id="manualPO" placeholder="Or type post office name manually" oninput="syncManualPO(this.value)"></div></div></div><input type="hidden" id="soState"><div class="frow"><div class="fcol"><label class="label">Grams *</label><select class="select" id="soGrams" onchange="updatePricing()"><option value="">-- Select --</option>'+Object.keys(PRICES).map(function(g){return '<option value="'+g+'">'+g+' gm</option>';}).join('')+'</select></div><div class="fcol"><label class="label">Bottle Option</label><select class="select" id="soMultiple" onchange="updatePricing()"><option value="0">Direct Size</option><option value="1">Multiple Bottles (discount)</option></select></div></div><div id="soPriceCard"></div><div class="frow"><div class="fcol"><label class="label">Payment Type</label><select class="select" id="soPayType" onchange="toggleScreenshot()"><option value="COD">COD</option><option value="Advance">Advance</option></select></div></div><div id="soScreenshotWrap" style="display:none"><div class="fcol"><label class="label">Payment Screenshot URL *</label><input type="text" class="input" id="soScreenshot" placeholder="Paste screenshot URL"></div></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="soNotes" placeholder="Optional"></div><button class="btn btn-p btn-full" id="soSubmitBtn" onclick="submitSalesOrderUI()" style="padding:13px">Submit Order</button><div id="soStatus"></div></div><div class="card"><div class="card-title">My Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myOrdersWrap"><div class="empty-state"><div>Click Load</div></div></div></div>';}
+function renderSalesOrderForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">New Sales Order</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Customer Name *</label><input type="text" class="input" id="soName" placeholder="Customer name"></div><div class="fcol"><label class="label">Phone *</label><input type="text" class="input" id="soPhone" placeholder="Phone number"></div></div><div id="soDupWarn"></div><div class="fcol"><label class="label">Address *</label><textarea class="textarea" id="soAddress" rows="2" placeholder="Full delivery address"></textarea></div><div class="frow"><div class="fcol"><label class="label">Pincode *</label><input type="text" class="input" id="soPincode" placeholder="6-digit pincode" oninput="if(this.value.length===6)lookupPincodeUI()"><div id="pincodeStatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div><div class="fcol"><label class="label">Post Office *</label><select class="select" id="soPostOffice"><option value="">-- Fetch by Pincode --</option></select><div style="margin-top:6px"><input type="text" class="input" id="manualPO" placeholder="Or type post office name manually" oninput="syncManualPO(this.value)"></div></div></div><input type="hidden" id="soState"><div class="frow"><div class="fcol"><label class="label">Grams *</label><select class="select" id="soGrams" onchange="updatePricing()"><option value="">-- Select --</option>'+Object.keys(PRICES).map(function(g){return '<option value="'+g+'">'+(g=='1000'?'1kg':g+'gm')+'</option>';}).join('')+'</select></div><div class="fcol"><label class="label">Bottle Option</label><select class="select" id="soMultiple" onchange="updatePricing()"><option value="0">Direct Size</option><option value="1">Multiple Bottles (discount)</option></select></div></div><div id="soPriceCard"></div><div class="frow"><div class="fcol"><label class="label">Payment Type</label><select class="select" id="soPayType" onchange="toggleScreenshot()"><option value="COD">COD</option><option value="Prepaid">Prepaid</option><option value="Advance">Advance</option></select></div></div><div id="soScreenshotWrap" style="display:none"><div class="fcol"><label class="label">Payment Screenshot URL *</label><input type="text" class="input" id="soScreenshot" placeholder="Paste screenshot URL"></div></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="soNotes" placeholder="Optional"></div><button class="btn btn-p btn-full" id="soSubmitBtn" onclick="submitSalesOrderUI()" style="padding:13px">Submit Order</button><div id="soStatus"></div></div><div class="card"><div class="card-title">My Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myOrdersWrap"><div class="empty-state"><div>Click Load</div></div></div></div>';}
 function lookupPincodeUI(){var pin=document.getElementById('soPincode').value.trim();if(pin.length!==6)return;var st=document.getElementById('pincodeStatus');var sel=document.getElementById('soPostOffice');if(st)st.textContent='Fetching...';google.script.run.withSuccessHandler(function(r){if(!r.success){if(st)st.textContent='Not found';return;}document.getElementById('soState').value=r.state||'';if(st)st.textContent=r.district+', '+r.state;if(sel){sel.innerHTML='<option value="">-- Select post office --</option>'+r.offices.map(function(o){return '<option value="'+o.name+'">'+o.name+(o.branchType?' ('+o.branchType+')':'')+'</option>';}).join('');}}).lookupPincode(pin);}
 function updatePricing(){var grams=parseInt(document.getElementById('soGrams').value)||0;var useMultiple=document.getElementById('soMultiple').value==='1';var el=document.getElementById('soPriceCard');if(!el)return;if(!grams){el.innerHTML='';return;}var p=calcPricing(grams,useMultiple);if(!p){el.innerHTML='';return;}var discountLine=p.discount>0?'<div class="price-row"><span style="color:#f87171">Discount ('+(p.boxes.indexOf(200)!==-1?'15%':'20%')+')</span><span class="discount-tag">-'+fnr(p.discount)+'</span></div>':'';el.innerHTML='<div class="price-card"><div class="price-row"><span>Selling Price</span><span>'+fnr(p.selling)+'</span></div>'+discountLine+'<div class="price-row" style="border-top:1px solid rgba(99,102,241,.3)"><span style="font-weight:800">Final Amount</span><span class="price-total">'+fnr(p.finalPrice)+'</span></div><div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text3)"><span>Boxes: <b style="color:var(--text)">'+p.labelText+'</b></span><span>Weight: <b style="color:var(--text)">'+p.weight+'g</b></span></div></div>';}
 function toggleScreenshot(){var val=document.getElementById('soPayType').value;var wrap=document.getElementById('soScreenshotWrap');if(wrap)wrap.style.display=val==='Advance'?'block':'none';}
-function submitSalesOrderUI(){var g=function(id){var el=document.getElementById(id);return el?el.value:'';};var name=g('soName').trim(),phone=g('soPhone').trim(),address=g('soAddress').trim(),pincode=g('soPincode').trim();var _mpo=document.getElementById('manualPO');var postOffice=(_mpo&&_mpo.value.trim())||g('soPostOffice'),grams=parseInt(g('soGrams'))||0,state=g('soState');var st=document.getElementById('soStatus');if(!name||!phone||!address||!pincode||!grams||!postOffice){if(st)st.innerHTML='<div class="err-msg">Fill all required fields</div>';return;}var payType=g('soPayType'),screenshot=g('soScreenshot').trim();if(payType==='Advance'&&!screenshot){if(st)st.innerHTML='<div class="err-msg">Screenshot required for advance</div>';return;}var btn=document.getElementById('soSubmitBtn');if(btn){btn.disabled=true;btn.textContent='Submitting...';}var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,brand:S.user.brand,customerName:name,phone:phone,address:address,pincode:pincode,state:state,postOffice:postOffice,grams:grams,useMultiple:g('soMultiple')==='1',paymentType:payType,screenshotUrl:screenshot,notes:g('soNotes').trim()};google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(r.success){if(st)st.innerHTML='<div class="ok-msg">Order #'+r.series+' submitted!'+(r.advanceRequired?' Advance required.':'')+'</div>';['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';}).submitSalesOrder(data);}
-function loadMyOrdersTable(){var el=document.getElementById('myOrdersWrap');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(orders){if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders yet</div></div>';return;}var h='<div class="table-scroll"><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Grams</th><th>Amount</th><th>EY</th><th>Status</th></tr></thead><tbody>';orders.forEach(function(o){h+='<tr><td style="color:#818cf8;font-weight:700">#'+o.series+'</td><td style="color:var(--text3)">'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+o.grams+'gm</td><td style="color:#34d399">'+fnr(o.finalPrice)+'</td><td style="font-size:10px;color:#22d3ee">'+(o.eyNumber||'-')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td></tr>';});h+='</tbody></table></div>';el.innerHTML=h;}).getSalesOrders({empId:S.user.empId});}
+
+function editOrderUI(orderId){
+  // Load order data and pre-fill form
+  var el=document.getElementById('myOrdersWrap');
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading order...</div>';
+  google.script.run
+    .withSuccessHandler(function(orders){
+      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
+      if(!o){alert('Order not found');return;}
+      // Scroll to form top
+      var pg=document.getElementById('pg-salesOrders');
+      if(pg)pg.scrollIntoView({behavior:'smooth'});
+      // Pre-fill form
+      var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
+      setV('soName',o.customerName);setV('soPhone',o.phone);setV('soAddress',o.address);
+      setV('soPincode',o.pincode);setV('soNotes',o.notes);
+      setV('soPayType',o.paymentType||'COD');toggleScreenshot();
+      // Set grams
+      var gramsVal=o.grams==='1kg'?1000:parseInt(o.grams)||0;
+      var grEl=document.getElementById('soGrams');
+      if(grEl)grEl.value=gramsVal;
+      updatePricing();
+      // Store editing order ID
+      var submitBtn=document.getElementById('soSubmitBtn');
+      if(submitBtn){
+        submitBtn.textContent='Update Order';
+        submitBtn.setAttribute('data-edit-id',orderId);
+        submitBtn.setAttribute('data-edit-series',o.series);
+      }
+      // Show edit banner
+      var st=document.getElementById('soStatus');
+      if(st)st.innerHTML='<div class="ok-msg" style="background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.3);color:#fb923c">&#9998; Editing Order #'+o.series+' — Make changes and tap Update Order <button onclick="cancelEditOrder()" style="background:none;border:none;color:#f87171;cursor:pointer;margin-left:8px">&#x2715; Cancel</button></div>';
+      // Scroll to top of form
+      window.scrollTo({top:0,behavior:'smooth'});
+    })
+    .getSalesOrders({empId:S.user.empId});
+}
+
+function cancelEditOrder(){
+  var submitBtn=document.getElementById('soSubmitBtn');
+  if(submitBtn){submitBtn.textContent='Submit Order';submitBtn.removeAttribute('data-edit-id');submitBtn.removeAttribute('data-edit-series');}
+  var st=document.getElementById('soStatus');
+  if(st)st.innerHTML='';
+  // Reset form
+  ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  var gr=document.getElementById('soGrams');if(gr)gr.value='';
+  var pp=document.getElementById('soPriceCard');if(pp)pp.innerHTML='';
+}
+
+function submitSalesOrderUI(){var g=function(id){var el=document.getElementById(id);return el?el.value:'';};var name=g('soName').trim(),phone=g('soPhone').trim(),address=g('soAddress').trim(),pincode=g('soPincode').trim();var _mpo=document.getElementById('manualPO');var postOffice=(_mpo&&_mpo.value.trim())||g('soPostOffice'),grams=parseInt(g('soGrams'))||0,state=g('soState');var st=document.getElementById('soStatus');if(!name||!phone||!address||!pincode||!grams||!postOffice){if(st)st.innerHTML='<div class="err-msg">Fill all required fields</div>';return;}var payType=g('soPayType'),screenshot=g('soScreenshot').trim();if(payType==='Advance'&&!screenshot){if(st)st.innerHTML='<div class="err-msg">Screenshot required for advance</div>';return;}var btn=document.getElementById('soSubmitBtn');
+  var editId=btn?btn.getAttribute('data-edit-id'):'';
+  var editSeries=btn?btn.getAttribute('data-edit-series'):'';
+  if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,brand:S.user.brand,customerName:name,phone:phone,address:address,pincode:pincode,state:state,postOffice:postOffice,grams:grams,useMultiple:g('soMultiple')==='1',paymentType:payType,screenshotUrl:screenshot,notes:g('soNotes').trim()};google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(r.success){
+          var isEdit=editId&&editId.length>0;
+          if(st)st.innerHTML='<div class="ok-msg">'+(isEdit?'Order #'+(editSeries||r.series)+' updated!':'Order #'+r.series+' submitted!')+(r.advanceRequired?' Advance required.':'')+'</div>';
+          if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';}).submitSalesOrder(data);}
+function loadMyOrdersTable(){
+  var el=document.getElementById('myOrdersWrap');if(!el)return;
+  var statusF=document.getElementById('myOrdStatusF')?document.getElementById('myOrdStatusF').value:'';
+  var payF=document.getElementById('myOrdPayF')?document.getElementById('myOrdPayF').value:'';
+  el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';
+  google.script.run.withSuccessHandler(function(orders){
+    if(!orders||!orders.length){el.innerHTML='<div class="empty-state"><div>No orders found</div></div>';return;}
+    // Filter by payment if selected
+    if(payF) orders=orders.filter(function(o){return o.paymentType===payF;});
+    if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders match filters</div></div>';return;}
+    var h='<div class="table-scroll"><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Grams</th><th>Amount</th><th>Type</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+    orders.forEach(function(o){
+      var editBtn='';
+      if(o.status==='Pending'){
+        editBtn='<button onclick="editOrderUI(\'' +o.orderId+ '\')" class="btn" style="padding:4px 8px;font-size:10px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c">&#9998; Edit</button>';
+      }
+      var payBadge='<span class="badge '+(o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by')+'">'+(o.paymentType||'COD')+'</span>';
+      h+='<tr><td style="color:#fb923c;font-weight:700">#'+o.series+'</td><td style="color:var(--text3)">'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+(o.grams==='1000'?'1kg':o.grams+'gm')+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td><td>'+payBadge+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+editBtn+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    el.innerHTML=h;
+  }).getSalesOrders({empId:S.user.empId,status:statusF});
+}
 function confirmOrderUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).confirmOrder(orderId,S.user.name);}
 function rejectOrderUI(orderId){var reason=prompt('Rejection reason:');google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).rejectOrder(orderId,reason||'');}
 function assignEYUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){alert('EY Assigned: '+r.eyNumber);loadSalesOrdersTable();}else{alert('Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
@@ -1064,7 +1187,7 @@ function renderMyDash(){
     });
     ofdBanner+='</div>';
   }
-  pg.innerHTML='<div class="profile-hdr"><div class="p-avatar">'+avatar+'</div><div><div class="p-name">'+S.user.name+'</div><div style="font-size:12px;opacity:.6">'+S.user.empId+' - '+S.user.brand+'</div><div class="p-tags"><span class="p-tag">'+S.user.brand+'</span><span class="p-tag">Leaves: '+leaveInfo.used+'/'+leaveInfo.max+'</span></div></div></div>'+ofdBanner+(leaveInfo.isExceeded?'<div class="err-msg" style="margin-bottom:14px">Out of leaves!</div>':'')+(!todayE?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">Not submitted today!</span><button class="btn btn-p" onclick="switchPage(\'orders\')" style="padding:7px 14px;font-size:12px">Submit Now</button></div>':'')+'<div class="card"><div class="card-title">Mark Attendance</div><div style="display:flex;gap:10px"><button class="att-btn" id="attBtnP" onclick="markAtt(\'Present\')">Present</button><button class="att-btn" id="attBtnH" onclick="markAtt(\'Half Day\')">Half Day</button><button class="att-btn" id="attBtnA" onclick="markAtt(\'Absent\')">Absent</button></div><div id="attMarkResult"></div></div><div class="g3" style="margin-bottom:18px"><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Conversion</div><div style="font-size:24px;font-weight:800;color:'+convColor(overallConv)+'">'+overallConv+'%</div></div><div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Net Conv</div><div style="font-size:24px;font-weight:800;color:'+convColor(netConv)+'">'+netConv+'%</div></div><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Enquiries</div><div style="font-size:24px;font-weight:800;color:#34d399">'+fn(allEnq)+'</div></div></div><div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total Orders</div><div class="sv">'+fn(allOrd)+'</div></div><div class="sc" style="--sc-col:#10b981"><div class="sl">Present Days</div><div class="sv">'+t.fD+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Returns</div><div class="sv" style="color:#f87171">'+myRet+'</div></div><div class="sc" style="--sc-col:#f59e0b"><div class="sl">Leaves Left</div><div class="sv" style="color:#fcd34d">'+leaveInfo.remaining+'</div></div></div><div class="table-wrap"><div class="table-hdr"><div class="table-title">My Daily Records</div><div class="table-badge">'+myEntries.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Date</th>'+(isMnv?'<th>L50</th><th>L100</th><th>L200</th><th>L500</th><th>Astra</th>':'<th>Shampoo</th><th>HairOil</th><th>Facewash</th>')+'<th>Total</th><th>Att</th></tr></thead><tbody>'+myEntries.slice(0,30).map(function(r){return'<tr><td style="color:var(--text3)">'+r.date+'</td>'+(isMnv?'<td style="color:#a78bfa">'+r.gl50+'</td><td style="color:#a78bfa">'+r.gl100+'</td><td style="color:#a78bfa">'+r.gl200+'</td><td style="color:#a78bfa">'+r.gl500+'</td><td style="color:#60a5fa">'+r.astraBottles+'</td>':'<td style="color:#34d399">'+r.shampoo+'</td><td style="color:#fcd34d">'+r.hairOil+'</td><td style="color:#f9a8d4">'+r.facewash+'</td>')+'<td style="font-weight:800">'+r.totalOrders+'</td><td><span style="color:'+attColor(r.att)+'">'+attLabel(r.att)+'</span></td></tr>';}).join('')+'</tbody></table></div></div>';
+  pg.innerHTML='<div class="profile-hdr"><div class="p-avatar">'+avatar+'</div><div><div class="p-name">'+S.user.name+'</div><div style="font-size:12px;opacity:.6">'+S.user.empId+' - '+S.user.brand+'</div><div class="p-tags"><span class="p-tag">'+S.user.brand+'</span><span class="p-tag">Leaves: '+leaveInfo.used+'/'+leaveInfo.max+'</span></div></div></div>'+ofdBanner+(leaveInfo.isExceeded?'<div class="err-msg" style="margin-bottom:14px">Out of leaves!</div>':'')+(!todayE?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">Not submitted today!</span><button class="btn btn-p" onclick="switchPage(\'orders\')" style="padding:7px 14px;font-size:12px">Submit Now</button></div>':'')+'<div class="card"><div class="card-title">Mark Attendance</div><div style="display:flex;gap:10px"><button class="att-btn" id="attBtnP" onclick="markAtt(\'Present\')">Present</button><button class="att-btn" id="attBtnH" onclick="markAtt(\'Half Day\')">Half Day</button><button class="att-btn" id="attBtnA" onclick="markAtt(\'Absent\')">Absent</button></div><div id="attMarkResult"></div></div><div class="g3" style="margin-bottom:18px"><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Conversion</div><div style="font-size:24px;font-weight:800;color:'+convColor(overallConv)+'">'+overallConv+'%</div></div><div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Net Conv</div><div style="font-size:24px;font-weight:800;color:'+convColor(netConv)+'">'+netConv+'%</div></div><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Enquiries</div><div style="font-size:24px;font-weight:800;color:#34d399">'+fn(allEnq)+'</div></div></div><div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total Orders</div><div class="sv">'+fn(allOrd)+'</div></div><div class="sc" style="--sc-col:#10b981"><div class="sl">Present Days</div><div class="sv">'+t.fD+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Returns</div><div class="sv" style="color:#f87171">'+myRet+'</div></div><div class="sc" style="--sc-col:#f59e0b"><div class="sl">Leaves Left</div><div class="sv" style="color:#fcd34d">'+leaveInfo.remaining+'</div></div></div><div class="table-wrap"><div class="table-hdr"><div class="table-title">My Daily Records</div><div class="table-badge">'+myEntries.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Date</th>'+(isMnv?'<th>Lehya 50</th><th>Lehya 100</th><th>Lehya 200</th><th>Lehya 500</th><th>Astra</th><th>COD</th><th>Prepaid</th>':'<th>Shampoo</th><th>HairOil</th><th>Facewash</th>')+'<th>Total</th><th>Att</th></tr></thead><tbody>'+myEntries.slice(0,30).map(function(r){return'<tr><td style="color:var(--text3)">'+r.date+'</td>'+(isMnv?'<td style="color:#fb923c">'+r.gl50+'</td><td style="color:#fb923c">'+r.gl100+'</td><td style="color:#fb923c">'+r.gl200+'</td><td style="color:#fb923c">'+r.gl500+'</td><td style="color:#60a5fa">'+r.astraBottles+'</td><td style="color:#34d399">'+(r.codOrders||0)+'</td><td style="color:#a78bfa">'+(r.prepaidOrders||0)+'</td>':'<td style="color:#34d399">'+r.shampoo+'</td><td style="color:#fcd34d">'+r.hairOil+'</td><td style="color:#f9a8d4">'+r.facewash+'</td>')+'<td style="font-weight:800">'+r.totalOrders+'</td><td><span style="color:'+attColor(r.att)+'">'+attLabel(r.att)+'</span></td></tr>';}).join('')+'</tbody></table></div></div>';
 }
 function submitCallUpdate(orderId,eyNumber,response,customerName,phone,notifId){var data={orderId:orderId,eyNumber:eyNumber,empId:S.user.empId,empName:S.user.name,called:'Yes',response:response,customerName:customerName,phone:phone,notes:''};google.script.run.withSuccessHandler(function(r){if(r.success){if(notifId)google.script.run.markNotificationSeen(notifId);refreshData();}}).submitDeliveryUpdate(data);}
 function markAllSeenUI(){google.script.run.withSuccessHandler(function(){refreshData();}).markAllNotificationsSeen(S.user.empId);}
@@ -1235,6 +1358,95 @@ setTimeout(function() {
   }
 }, 8000);
 
+// ══ CRM BOT ══
+var BOT_OPEN = false;
+function toggleBot(){
+  BOT_OPEN = !BOT_OPEN;
+  var panel = document.getElementById('botPanel');
+  if(panel) panel.classList.toggle('open', BOT_OPEN);
+  if(BOT_OPEN){var inp=document.getElementById('botInput');if(inp)inp.focus();}
+}
+function botSend(){
+  var inp = document.getElementById('botInput');
+  if(!inp||!inp.value.trim()) return;
+  botAsk(inp.value.trim());
+  inp.value = '';
+}
+function botAddMsg(text, isUser){
+  var msgs = document.getElementById('botMessages');
+  if(!msgs) return;
+  var div = document.createElement('div');
+  div.className = 'bot-msg ' + (isUser ? 'user' : 'bot');
+  div.innerHTML = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function botAsk(q){
+  botAddMsg(q, true);
+  var lq = q.toLowerCase();
+  var reply = '';
+  if(lq.indexOf('today')!==-1||lq.indexOf('stat')!==-1){
+    var td=todayStr();
+    var myEntries=(S.data&&S.data.entries||[]).filter(function(r){return r.empId===S.user.empId;});
+    var todayE=myEntries.find(function(r){return r.date===td;});
+    if(todayE){reply='<b>Today ('+td+')</b><br>Orders: <b>'+todayE.totalOrders+'</b><br>Enquiries: <b>'+todayE.totalEnquiries+'</b><br>Att: <b>'+(todayE.att===1?'Present':todayE.att===0.5?'Half Day':'Absent')+'</b>';}
+    else{reply='No entry for today yet. Go to Daily Orders to submit!';}
+  } else if(lq.indexOf('pending')!==-1){
+    var pending=(S.data&&S.data.myOrders||[]).filter(function(o){return o.status==='Pending';});
+    reply='You have <b>'+pending.length+'</b> pending order'+(pending.length!==1?'s':'')+'.';
+    if(pending.length)reply+='<br>Latest: <b>'+pending[0].customerName+'</b> — '+fnr(pending[0].finalPrice);
+  } else if(lq.indexOf('pric')!==-1){
+    reply='<b>Lehya Pricing</b><br>50gm→₹699 | 100gm→₹899 | 200gm→₹1399 | 250gm→₹1749 | 500gm→₹3149 | 1kg→₹5149<br><small>Full list in Sales Orders form</small>';
+  } else if(lq.indexOf('salary')!==-1||lq.indexOf('earn')!==-1){
+    var myOrds=S.data&&S.data.myOrders||[];
+    var cod=myOrds.filter(function(o){return o.paymentType==='COD'&&o.status!=='RTO';}).length;
+    var pre=myOrds.filter(function(o){return o.paymentType==='Prepaid'&&o.status!=='RTO';}).length;
+    reply='<b>Incentive Estimate</b><br>COD: <b>'+cod+'</b> × ₹13 = ₹'+(cod*13)+'<br>Prepaid: <b>'+pre+'</b> × ₹20 = ₹'+(pre*20)+'<br>Total: <b>₹'+((cod*13)+(pre*20))+'</b>';
+  } else if(lq.indexOf('conv')!==-1){
+    var myE=(S.data&&S.data.entries||[]).filter(function(r){return r.empId===S.user.empId;});
+    var totOrd=myE.reduce(function(s,r){return s+r.totalOrders;},0);
+    var totEnq=myE.reduce(function(s,r){return s+r.totalEnquiries;},0);
+    var conv=totEnq>0?(totOrd/totEnq*100).toFixed(1):0;
+    reply='<b>Conversion Rate</b><br>Orders: <b>'+totOrd+'</b> / Enquiries: <b>'+totEnq+'</b><br>Rate: <b>'+conv+'%</b>';
+  } else if(lq.indexOf('leave')!==-1){
+    var li=S.data&&S.data.leaveInfo||{used:0,remaining:5};
+    reply='<b>Leave Status</b><br>Used: <b>'+li.used+' days</b><br>Remaining: <b>'+li.remaining+' days</b>';
+  } else {
+    reply='I can help with: <b>today stats, pending orders, pricing, salary, conversion, leave</b>';
+  }
+  setTimeout(function(){botAddMsg(reply,false);},400);
+}
+
 </script>
+
+<!-- CRM BOT -->
+<button class="bot-fab" id="botFab" onclick="toggleBot()" style="display:none">
+  🤖
+</button>
+<div class="bot-panel" id="botPanel">
+  <div class="bot-header">
+    <div class="bot-avatar">🤖</div>
+    <div>
+      <div class="bot-title">Vesino Assistant</div>
+      <div class="bot-subtitle">Your CRM helper • Always online</div>
+    </div>
+    <button class="bot-close" onclick="toggleBot()">✕</button>
+  </div>
+  <div class="bot-messages" id="botMessages">
+    <div class="bot-msg bot">Hi! I'm your CRM assistant. I can help you with orders, pricing, and your performance. What do you need? 👋</div>
+  </div>
+  <div class="bot-quick" id="botQuick">
+    <button class="bot-qbtn" onclick="botAsk('today stats')">📊 Today Stats</button>
+    <button class="bot-qbtn" onclick="botAsk('pending orders')">📦 Pending Orders</button>
+    <button class="bot-qbtn" onclick="botAsk('pricing')">💰 Pricing</button>
+    <button class="bot-qbtn" onclick="botAsk('my salary')">💵 My Salary</button>
+    <button class="bot-qbtn" onclick="botAsk('conversion rate')">📈 Conversion</button>
+  </div>
+  <div class="bot-input-row">
+    <input class="bot-input" id="botInput" type="text" placeholder="Ask me anything..." onkeydown="if(event.key==='Enter')botSend()">
+    <button class="bot-send" onclick="botSend()">➤</button>
+  </div>
+</div>
+
 </body>
 </html>

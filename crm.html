@@ -1075,101 +1075,210 @@ function updatePricing(){var grams=parseInt(document.getElementById('soGrams').v
 function toggleScreenshot(){var val=document.getElementById('soPayType').value;var wrap=document.getElementById('soScreenshotWrap');if(wrap)wrap.style.display=val==='Advance'?'block':'none';}
 
 function editOrderUI(orderId){
-  // Load order data and pre-fill form
-  var el=document.getElementById('myOrdersWrap');
-  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading order...</div>';
-  google.script.run
-    .withSuccessHandler(function(orders){
-      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
-      if(!o){alert('Order not found');return;}
-      // Scroll to form top
-      var pg=document.getElementById('pg-salesOrders');
-      if(pg)pg.scrollIntoView({behavior:'smooth'});
-      // Pre-fill form
-      var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
-      setV('soName',o.customerName);setV('soPhone',o.phone);setV('soAddress',o.address);
-      setV('soPincode',o.pincode);setV('soNotes',o.notes);
-      setV('soPayType',o.paymentType||'COD');toggleScreenshot();
-      // Set grams
-      var gramsVal=o.grams==='1kg'?1000:parseInt(o.grams)||0;
-      var grEl=document.getElementById('soGrams');
-      if(grEl)grEl.value=gramsVal;
-      updatePricing();
-      // Store editing order ID
-      var submitBtn=document.getElementById('soSubmitBtn');
-      if(submitBtn){
-        submitBtn.textContent='Update Order';
-        submitBtn.setAttribute('data-edit-id',orderId);
-        submitBtn.setAttribute('data-edit-series',o.series);
-      }
-      // Show edit banner
-      var st=document.getElementById('soStatus');
-      if(st)st.innerHTML='<div class="ok-msg" style="background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.3);color:#fb923c">&#9998; Editing Order #'+o.series+' — Make changes and tap Update Order <button onclick="cancelEditOrder()" style="background:none;border:none;color:#f87171;cursor:pointer;margin-left:8px">&#x2715; Cancel</button></div>';
-      // Scroll to top of form
-      window.scrollTo({top:0,behavior:'smooth'});
-    })
-    .getSalesOrders({empId:S.user.empId});
+  // Get from cached data - NO API CALL
+  var allOrders = (S.data&&S.data.myOrders)||[];
+  var o = allOrders.find(function(x){return x.orderId===orderId;});
+
+  if(!o){
+    // Fallback only if not in cache
+    google.script.run
+      .withSuccessHandler(function(orders){
+        var found=orders&&orders.find(function(x){return x.orderId===orderId;});
+        if(!found){showToast('Order not found','red');return;}
+        _fillEditForm(found);
+      })
+      .getSalesOrders({empId:S.user.empId});
+    return;
+  }
+  _fillEditForm(o);
+}
+
+function _fillEditForm(o){
+  var orderId=o.orderId;
+  // Scroll to form
+  var pg=document.getElementById('pg-salesOrders');
+  if(pg)pg.scrollIntoView({behavior:'smooth'});
+  window.scrollTo({top:0,behavior:'smooth'});
+
+  // Pre-fill all fields
+  var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
+  setV('soName',o.customerName);
+  setV('soPhone',o.phone);
+  setV('soAddress',o.address);
+  setV('soPincode',o.pincode);
+  setV('soState',o.state);
+  setV('soNotes',o.notes);
+  setV('soPayType',o.paymentType||'COD');
+  toggleScreenshot();
+
+  // Set post office
+  var sel=document.getElementById('soPostOffice');
+  if(sel){
+    // Add the order's post office as option if not present
+    var exists=false;
+    for(var i=0;i<sel.options.length;i++){
+      if(sel.options[i].value===o.postOffice){exists=true;break;}
+    }
+    if(!exists&&o.postOffice){
+      var opt=document.createElement('option');
+      opt.value=o.postOffice;
+      opt.text=o.postOffice;
+      sel.appendChild(opt);
+    }
+    sel.value=o.postOffice||'';
+  }
+
+  // Set pincode status
+  var pst=document.getElementById('pincodeStatus');
+  if(pst){pst.textContent='✅ '+o.pincode;pst.style.color='#34d399';}
+
+  // Set grams and update pricing
+  var grEl=document.getElementById('soGrams');
+  if(grEl){grEl.value=String(o.grams||'');updatePricing();}
+
+  // Set edit mode on button
+  var btn=document.getElementById('soSubmitBtn');
+  if(btn){
+    btn.textContent='Update Order';
+    btn.style.background='linear-gradient(135deg,#1d4ed8,#3b82f6)';
+    btn.setAttribute('data-edit-id',orderId);
+    btn.setAttribute('data-edit-series',o.series);
+  }
+
+  // Show edit banner
+  var st=document.getElementById('soStatus');
+  if(st)st.innerHTML='<div class="ok-msg" style="background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:#60a5fa">'+
+    '✎ Editing Order #'+o.series+' &nbsp;|&nbsp; '+o.customerName+
+    ' &nbsp;<button onclick="cancelEditOrder()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:12px">✕ Cancel Edit</button></div>';
+
+  // Reload My Orders quietly
+  var mow=document.getElementById('myOrdersWrap');
+  if(mow)mow.innerHTML='<div class="empty-state"><div>Tap Load after submitting update</div></div>';
 }
 
 function cancelEditOrder(){
-  var submitBtn=document.getElementById('soSubmitBtn');
-  if(submitBtn){submitBtn.textContent='Submit Order';submitBtn.removeAttribute('data-edit-id');submitBtn.removeAttribute('data-edit-series');}
-  var st=document.getElementById('soStatus');
-  if(st)st.innerHTML='';
-  // Reset form
+  var btn=document.getElementById('soSubmitBtn');
+  if(btn){
+    btn.textContent='Submit Order';
+    btn.style.background='';
+    btn.removeAttribute('data-edit-id');
+    btn.removeAttribute('data-edit-series');
+    btn.disabled=false;
+  }
+  var st=document.getElementById('soStatus');if(st)st.innerHTML='';
   ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   var gr=document.getElementById('soGrams');if(gr)gr.value='';
   var pp=document.getElementById('soPriceCard');if(pp)pp.innerHTML='';
+  var sel=document.getElementById('soPostOffice');if(sel)sel.innerHTML='<option value="">-- Fetch by Pincode --</option>';
+  var pst=document.getElementById('pincodeStatus');if(pst)pst.textContent='';
+  showToast('Edit cancelled','orange');
 }
 
-function submitSalesOrderUI(){var g=function(id){var el=document.getElementById(id);return el?el.value:'';};var name=g('soName').trim(),phone=g('soPhone').trim(),address=g('soAddress').trim(),pincode=g('soPincode').trim();var _mpo=document.getElementById('manualPO');var postOffice=(_mpo&&_mpo.value.trim())||g('soPostOffice'),grams=parseInt(g('soGrams'))||0,state=g('soState');var st=document.getElementById('soStatus');if(!name||!phone||!address||!pincode||!grams||!postOffice){if(st)st.innerHTML='<div class="err-msg">Fill all required fields</div>';return;}var payType=g('soPayType'),screenshot=g('soScreenshot').trim();if(payType==='Advance'&&!screenshot){if(st)st.innerHTML='<div class="err-msg">Screenshot required for advance</div>';return;}var btn=document.getElementById('soSubmitBtn');
+function submitSalesOrderUI(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+
+  var name=g('soName');
+  var phone=g('soPhone');
+  var address=g('soAddress');
+  var pincode=g('soPincode');
+  var grams=parseInt(g('soGrams'))||0;
+  var state=g('soState');
+  var payType=g('soPayType')||'COD';
+  var notes=g('soNotes');
+  var screenshot=g('soScreenshot');
+
+  // Post office: manual field takes priority, then dropdown
+  var mpo=document.getElementById('manualPO');
+  var postOffice=(mpo&&mpo.style.display!=='none'&&mpo.value.trim())?mpo.value.trim():g('soPostOffice');
+
+  var btn=document.getElementById('soSubmitBtn');
   var editId=btn?btn.getAttribute('data-edit-id'):'';
   var editSeries=btn?btn.getAttribute('data-edit-series'):'';
-  if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,brand:S.user.brand,customerName:name,phone:phone,address:address,pincode:pincode,state:state,postOffice:postOffice,grams:grams,useMultiple:g('soMultiple')==='1',paymentType:payType,screenshotUrl:screenshot,notes:g('soNotes').trim()};google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(r.success){
-          var isEdit=editId&&editId.length>0;
-          if(st)st.innerHTML='<div class="ok-msg">'+(isEdit?'Order #'+(editSeries||r.series)+' updated!':'Order #'+r.series+' submitted!')+(r.advanceRequired?' Advance required.':'')+'</div>';
-          if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';});
-  // Route to update or create based on edit mode
-  if(editId){
-    google.script.run.withSuccessHandler(function(r){
-      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-      if(r&&r.success){
-        if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated successfully!</div>';
-        if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}
-        ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-        var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
-        var st2=document.getElementById('soStatus');if(st2)st2.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated!</div>';
-        loadMyOrdersTable();
-      }else{
-        if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Update failed')+'</div>';
+  var st=document.getElementById('soStatus');
+
+  // Validation
+  var missing=[];
+  if(!name) missing.push('Customer Name');
+  if(!phone||phone.length<10) missing.push('Phone (10 digits)');
+  if(!address) missing.push('Address');
+  if(!pincode||pincode.length!==6) missing.push('Pincode (6 digits)');
+  if(!grams) missing.push('Grams');
+  if(!postOffice) missing.push('Post Office');
+  if(payType==='Advance'&&!screenshot) missing.push('Screenshot URL');
+
+  if(missing.length>0){
+    if(st)st.innerHTML='<div class="err-msg">Please fill: '+missing.join(', ')+'</div>';
+    return;
+  }
+
+  // Disable button
+  if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}
+  if(st)st.innerHTML='';
+
+  var data={
+    empId:S.user.empId,
+    empName:S.user.name,
+    brand:S.user.brand||'Manveera',
+    date:todayStr(),
+    customerName:name,
+    phone:phone,
+    address:address,
+    pincode:pincode,
+    state:state,
+    postOffice:postOffice,
+    grams:grams,
+    useMultiple:g('soMultiple')==='1',
+    paymentType:payType,
+    screenshotUrl:screenshot,
+    notes:notes
+  };
+
+  function onSuccess(r){
+    if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}
+    if(r&&r.success){
+      var msg=editId?'✅ Order #'+(r.series||editSeries)+' updated!':'✅ Order #'+r.series+' submitted!'+(r.advanceRequired?' — Advance required.':'');
+      if(st)st.innerHTML='<div class="ok-msg">'+msg+'</div>';
+      showToast(msg.replace('✅ ',''),'green');
+      // Reset form
+      if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');}
+      ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){
+        var el=document.getElementById(id);if(el)el.value='';
+      });
+      var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
+      var sel=document.getElementById('soPostOffice');if(sel)sel.innerHTML='<option value="">-- Fetch by Pincode --</option>';
+      if(mpo)mpo.value='';
+      var pst=document.getElementById('pincodeStatus');if(pst)pst.textContent='';
+      // Reload orders list
+      setTimeout(function(){loadMyOrdersTable();},300);
+    } else {
+      if(st){
+        if(r&&r.duplicate) st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';
+        else st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Error occurred')+'</div>';
       }
-    }).withFailureHandler(function(e){
-      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-      if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
-    }).updateSalesOrder(data);
+    }
+  }
+
+  function onFail(e){
+    if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}
+    if(st)st.innerHTML='<div class="err-msg">Network error: '+e.message+'</div>';
+    showToast('Network error','red');
+  }
+
+  // Route to update or create
+  if(editId){
+    data.orderId=editId;
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onFail)
+      .updateSalesOrder(data);
   } else {
     google.script.run
-      .withSuccessHandler(function(r){
-        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-        if(r&&r.success){
-          if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' submitted!'+(r.advanceRequired?' Advance required.':'')+'</div>';
-          ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-          var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
-          loadMyOrdersTable();
-        }else{
-          if(st){
-            if(r&&r.duplicate)st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';
-            else st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Error submitting')+'</div>';
-          }
-        }
-      })
-      .withFailureHandler(function(e){
-        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-        if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
-      })
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onFail)
       .submitSalesOrder(data);
   }
 }
+
 function loadMyOrdersTable(){
   var el=document.getElementById('myOrdersWrap');if(!el)return;
   var statusF=document.getElementById('myOrdStatusF')?document.getElementById('myOrdStatusF').value:'';

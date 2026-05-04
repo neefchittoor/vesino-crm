@@ -409,6 +409,12 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.025
 
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
+
+@keyframes shimmer{
+  0%{background:var(--surface2)}
+  50%{background:rgba(255,255,255,.06)}
+  100%{background:var(--surface2)}
+}
 </style>
 </head>
 <body>
@@ -1181,7 +1187,7 @@ function loadMyOrdersTable(){
         editBtn='<button onclick="editOrderUI(\'' +o.orderId+ '\')" class="btn" style="padding:4px 8px;font-size:10px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c">&#9998; Edit</button>';
       }
       var payBadge='<span class="badge '+(o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by')+'">'+(o.paymentType||'COD')+'</span>';
-      h+='<tr><td style="color:#fb923c;font-weight:700">#'+o.series+'</td><td style="color:var(--text3)">'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+(o.grams==='1000'?'1kg':o.grams+'gm')+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td><td>'+payBadge+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+editBtn+'</td></tr>';
+      h+='<tr><td style="color:#fb923c;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td><td style="color:var(--text3)">'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+(o.grams==='1000'?'1kg':o.grams+'gm')+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td><td>'+payBadge+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+editBtn+'</td></tr>';
     });
     h+='</tbody></table></div>';
     el.innerHTML=h;
@@ -1588,7 +1594,7 @@ function renderConfOrders(orders){
     var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
     var addrShort=(o.address||'').substring(0,25)+((o.address||'').length>25?'...':'');
     h+='<tr>'+
-      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
+      '<td style="color:#fb923c;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
       '<td style="font-weight:700">'+o.customerName+'<br><span style="font-size:10px;color:var(--text3)">'+o.phone+'</span></td>'+
       '<td style="font-size:10px;color:var(--text2);max-width:120px" title="'+o.address+'">'+addrShort+'<br>'+o.pincode+' '+o.postOffice+'</td>'+
       '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
@@ -1704,7 +1710,7 @@ function renderLabelQueueTable(orders){
               '<button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Dispatch</button>';
     }
     h+='<tr>'+
-      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
+      '<td style="color:#fb923c;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
       '<td style="font-weight:700">'+o.customerName+'</td>'+
       '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
       '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
@@ -1977,6 +1983,44 @@ function saveEditAdmin(orderId,series){
 function closeEditModal(){
   var m=document.getElementById('editOrderModal');
   if(m)m.style.display='none';
+}
+
+
+// OPTIMISTIC UI - update row status instantly without reload
+function updateRowStatus(orderId, newStatus){
+  var rows = document.querySelectorAll('tr');
+  rows.forEach(function(row){
+    // Check if this row contains the orderId
+    var cells = row.querySelectorAll('td');
+    var found = false;
+    cells.forEach(function(c){ if(c.getAttribute('data-oid')===orderId) found=true; });
+    if(!found){
+      // Also check text content of first orange cell
+      cells.forEach(function(c){
+        if(c.style && c.style.color && c.getAttribute && c.getAttribute('data-oid')===orderId) found=true;
+      });
+    }
+    if(found){
+      // Find status badge in this row and update
+      var badges = row.querySelectorAll('.badge, span[class*="badge"]');
+      badges.forEach(function(b){
+        var t=b.textContent.trim();
+        if(['Pending','Confirmed','Rejected','Dispatched','Delivered','Out for Delivery','Label Generated','RTO'].indexOf(t)!==-1){
+          b.textContent = newStatus;
+          b.className = statusBadgeClass(newStatus);
+        }
+      });
+      // Also hide action buttons for terminal states
+      if(newStatus==='Confirmed'||newStatus==='Rejected'){
+        var btns=row.querySelectorAll('.btn-g, .btn-d');
+        btns.forEach(function(b){
+          if(b.textContent.indexOf('Confirm')!==-1||b.textContent.indexOf('Reject')!==-1){
+            b.style.opacity='0.3';b.disabled=true;
+          }
+        });
+      }
+    }
+  });
 }
 
 window.onload = function() {

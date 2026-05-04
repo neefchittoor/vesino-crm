@@ -816,6 +816,7 @@ var PRICES={
 var BOTTLE_W={50:{weight:114,volWeight:147},100:{weight:192,volWeight:210},200:{weight:310,volWeight:340}};
 var PAGE_MAP={dashboard:'Dashboard',orders:'Daily Orders',enquiries:'Enquiries',performance:'Performance',returns:'Returns',attendance:'Attendance',leaves:'Leave Management',salary:'Salary',customers:'Customers',reports:'Reports',admin:'Administration',myDash:'My Dashboard',mySalary:'My Salary',myLeave:'My Leave',confirmation:'Confirmation',dataentry:'Data Entry',salesOrders:'Sales Orders',labelGen:'Label Generation',eyManage:'EY Number Management',ofdDash:'OFD Dashboard',chatbot:'Order Lookup'};
 function fn(n){return Number(n||0).toLocaleString('en-IN');}
+function fmtD(d){if(!d)return '-';try{var s=String(d);var p=s.indexOf('-')!==-1?s.split('-'):s.split('/');if(p.length===3&&p[0].length===4)return p[2]+'-'+p[1]+'-'+p[0];return s;}catch(e){return String(d||'-');}}
 function fnr(n){return '\u20B9'+Number(n||0).toLocaleString('en-IN');}
 function todayStr(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear();}
 function getMo(ds){try{var p=String(ds).split('-');return p[2]&&p[2].length===4?p[2]+'-'+p[1].padStart(2,'0'):p[0]+'-'+p[1].padStart(2,'0');}catch(e){return '';}}
@@ -1227,7 +1228,96 @@ function deleteReturnUI(date,empId,product){if(!confirm('Delete?'))return;google
 function renderAttendance(){var pg=document.getElementById('pg-attendance');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Attendance</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="attDateF" onchange="filterAtt()"></select><span class="fl">Month:</span><select class="fsel" id="attMonF" onchange="filterAtt()"></select><span class="fl">Employee:</span><select class="fsel" id="attEmpF" onchange="filterAtt()"><option value="">All</option></select><button class="btn btn-s" onclick="resetAttF()">Reset</button></div><div id="attWrap"><div class="loading"><div class="spin-sm"></div></div></div>';populateFilters();var td=document.getElementById('attDateF');if(td)td.value=todayStr();filterAtt();}
 function filterAtt(){var dateF=document.getElementById('attDateF')?document.getElementById('attDateF').value:'';var monF=document.getElementById('attMonF')?document.getElementById('attMonF').value:'';var empF=document.getElementById('attEmpF')?document.getElementById('attEmpF').value:'';var aw=document.getElementById('attWrap');if(!aw)return;aw.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(records){if(!records.length){aw.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var fD=records.filter(function(r){return r.att===1;}).length,hD=records.filter(function(r){return r.att===0.5;}).length,aD=records.filter(function(r){return r.att===0;}).length;var h='<div class="att-grid"><div class="att-block att-p"><div class="att-num">'+fD+'</div><div class="att-lbl">Full</div></div><div class="att-block att-h"><div class="att-num">'+hD+'</div><div class="att-lbl">Half</div></div><div class="att-block att-a"><div class="att-num">'+aD+'</div><div class="att-lbl">Absent</div></div><div class="att-block att-t"><div class="att-num">'+records.length+'</div><div class="att-lbl">Records</div></div></div>';h+='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Status</th></tr></thead><tbody>';records.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td><span style="color:'+attColor(r.att)+'">'+r.status+'</span></td></tr>';});h+='</tbody></table></div></div>';aw.innerHTML=h;}).withFailureHandler(function(e){aw.innerHTML='<div class="err-msg">'+e.message+'</div>';}).getAttendanceRecords({date:dateF,month:monF,empId:empF});}
 function resetAttF(){['attDateF','attMonF','attEmpF'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});filterAtt();}
-function renderLeaves(){var pg=document.getElementById('pg-leaves');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Leave Management</div></div><div class="fbar"><select class="fsel" id="lvStatusF" onchange="loadAdminLeaves()"><option value="">All</option><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select><button class="btn btn-s" onclick="loadAdminLeaves()">Refresh</button></div><div id="adminLeavesWrap"><div class="loading"><div class="spin-sm"></div></div></div>';loadAdminLeaves();}
+function renderLeaves(){
+  var pg=document.getElementById('pg-leaves');if(!pg)return;
+  if(S.user.isAdmin){
+    // Admin view
+    pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Leave Management</div></div>'+
+    '<div class="fbar"><select class="fsel" id="lvStatusF" onchange="loadAdminLeaves()"><option value="">All</option><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select>'+
+    '<button class="btn btn-s" onclick="loadAdminLeaves()">Refresh</button></div>'+
+    '<div id="adminLeavesWrap"><div class="loading"><div class="spin-sm"></div></div></div>';
+    loadAdminLeaves();
+  } else {
+    // Employee view - apply + history
+    var li=S.data&&S.data.leaveInfo||{used:0,remaining:5};
+    pg.innerHTML='<div class="pg-hdr"><div class="pg-title">My Leaves</div></div>'+
+    '<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+    '<div class="sc" style="--sc-col:#f97316"><div class="sl">Used</div><div class="sv" style="color:#fb923c">'+(li.used||0)+'</div></div>'+
+    '<div class="sc" style="--sc-col:#34d399"><div class="sl">Remaining</div><div class="sv" style="color:#34d399">'+(li.remaining||5)+'</div></div>'+
+    '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Max/Month</div><div class="sv" style="color:#22d3ee">5</div></div>'+
+    '</div>'+
+    '<div class="card"><div class="card-title">📝 Apply Leave</div>'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">From Date</label><input type="date" class="input" id="lvFrom"></div>'+
+    '<div class="fcol"><label class="label">To Date</label><input type="date" class="input" id="lvTo"></div>'+
+    '</div>'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Leave Type</label><select class="select" id="lvType"><option>Casual Leave</option><option>Sick Leave</option><option>Personal Leave</option><option>Emergency Leave</option></select></div>'+
+    '<div class="fcol"><label class="label">Reason</label><input type="text" class="input" id="lvReason" placeholder="Reason for leave"></div>'+
+    '</div>'+
+    '<button class="btn btn-p" onclick="applyLeaveUI()" style="margin-top:10px">Apply Leave</button>'+
+    '<div id="lvStatus"></div></div>'+
+    '<div class="card"><div class="card-title">📋 My Leave History <button class="btn btn-s" onclick="loadMyLeaves()" style="padding:5px 12px;font-size:11px">Load</button></div>'+
+    '<div id="myLeavesWrap"><div class="empty-state"><div>Tap Load to see history</div></div></div></div>';
+  }
+}
+
+function applyLeaveUI(){
+  var from=document.getElementById('lvFrom').value;
+  var to=document.getElementById('lvTo').value;
+  var type=document.getElementById('lvType').value;
+  var reason=document.getElementById('lvReason').value.trim();
+  var st=document.getElementById('lvStatus');
+  if(!from||!to){if(st)st.innerHTML='<div class="err-msg">Select from and to dates</div>';return;}
+  if(!reason){if(st)st.innerHTML='<div class="err-msg">Enter reason</div>';return;}
+  var f=new Date(from),t=new Date(to);
+  if(t<f){if(st)st.innerHTML='<div class="err-msg">To date must be after From date</div>';return;}
+  var days=Math.round((t-f)/(1000*60*60*24))+1;
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Submitting...</div>';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r.success){
+        if(st)st.innerHTML='<div class="ok-msg">✅ Leave applied for '+days+' day(s)! Pending approval.</div>';
+        document.getElementById('lvFrom').value='';
+        document.getElementById('lvTo').value='';
+        document.getElementById('lvReason').value='';
+        loadMyLeaves();
+      } else {
+        if(st)st.innerHTML='<div class="err-msg">'+(r.msg||'Failed to apply')+'</div>';
+      }
+    })
+    .withFailureHandler(function(e){
+      if(st)st.innerHTML='<div class="err-msg">Error: '+(e.message||'Failed')+'</div>';
+    })
+    .applyLeave({empId:S.user.empId,empName:S.user.name,leaveType:type,fromDate:from,toDate:to,days:days,reason:reason});
+}
+
+function loadMyLeaves(){
+  var el=document.getElementById('myLeavesWrap');if(!el)return;
+  el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';
+  google.script.run
+    .withSuccessHandler(function(rows){
+      if(!rows||!rows.length){el.innerHTML='<div class="empty-state"><div>No leave history</div></div>';return;}
+      var h='<div class="table-scroll"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Reason</th></tr></thead><tbody>';
+      rows.forEach(function(r){
+        var sC=r.status==='Approved'?'bg':r.status==='Rejected'?'br':'by';
+        h+='<tr>'+
+          '<td>'+(r.leaveType||'Leave')+'</td>'+
+          '<td>'+fmtD(r.fromDate)+'</td>'+
+          '<td>'+fmtD(r.toDate)+'</td>'+
+          '<td style="text-align:center;font-weight:800">'+(r.days||'-')+'</td>'+
+          '<td><span class="badge '+sC+'">'+r.status+'</span></td>'+
+          '<td style="font-size:11px;color:var(--text3)">'+(r.reason||'-')+'</td>'+
+          '</tr>';
+      });
+      h+='</tbody></table></div>';
+      el.innerHTML=h;
+    })
+    .withFailureHandler(function(e){
+      el.innerHTML='<div class="err-msg">Error: '+(e.message||'Failed')+'</div>';
+    })
+    .getLeaves(S.user.empId,false);
+}
 function loadAdminLeaves(){
   var statusF=document.getElementById('lvStatusF')?document.getElementById('lvStatusF').value:'';
   var el=document.getElementById('adminLeavesWrap');

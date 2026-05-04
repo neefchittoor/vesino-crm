@@ -1006,51 +1006,61 @@ function renderDashboard(){
 function renderSalesOrders(){var pg=document.getElementById('pg-salesOrders');if(!pg)return;if(S.user.role==='Sales'&&!S.user.isAdmin){renderSalesOrderForm(pg);return;}var title=S.user.isAdmin?'All Orders':S.user.role==='Confirmation'?'Orders to Confirm':'Orders Queue';pg.innerHTML='<div class="pg-hdr"><div class="pg-title">'+title+'</div></div><div class="fbar"><span class="fl">Status:</span><select class="fsel" id="soStatusF" onchange="loadSalesOrdersTable()"><option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option><option>Label Generated</option><option>Dispatched</option><option>Out for Delivery</option><option>Delivered</option><option>RTO</option></select><span class="fl">Date:</span><input type="text" class="fsel" id="soDateF" placeholder="dd-mm-yyyy" style="min-width:120px"><button class="btn btn-p" onclick="loadSalesOrdersTable()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'soStatusF\').value=\'\';document.getElementById(\'soDateF\').value=\'\';loadSalesOrdersTable()">Reset</button></div><div id="soTableWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div>';loadSalesOrdersTable();}
 function loadSalesOrdersTable(){var statusF=document.getElementById('soStatusF')?document.getElementById('soStatusF').value:'';var dateF=document.getElementById('soDateF')?document.getElementById('soDateF').value:'';var el=document.getElementById('soTableWrap');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(orders){if(!orders.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>No orders found</div></div>';return;}var canConfirm=S.user.isAdmin||S.user.role==='Confirmation';var canLabel=S.user.isAdmin||S.user.role==='DataEntry';var h='<div class="table-wrap"><div class="table-hdr"><div class="table-title">Orders</div><div class="table-badge">'+orders.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Series</th><th>Date</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th></tr></thead><tbody>';orders.forEach(function(o){var actions='';if(canConfirm&&o.status==='Pending'){actions+='<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:4px">Confirm</button><button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Reject</button>';}if(canLabel&&o.status==='Confirmed'){actions+='<button onclick="assignEYUI(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">Assign EY</button>';}if(canLabel&&o.status==='Label Generated'){actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Dispatch</button>';}if((S.user.isAdmin||S.user.role==='DataEntry')&&(o.status==='Dispatched'||o.status==='Out for Delivery')){actions+='<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-right:4px">OFD</button><button onclick="markDeliveredUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Delivered</button>';}if(S.user.isAdmin){actions+='<button onclick="deleteSalesOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-top:4px">Delete</button>';}h+='<tr><td style="font-weight:700;color:#818cf8">#'+o.series+'</td><td>'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td style="color:#818cf8">'+o.phone+'</td><td>'+o.grams+'gm</td><td style="font-weight:800;color:#34d399">'+fnr(o.finalPrice)+(o.discount>0?'<div style="font-size:9px;color:#f87171">-'+fnr(o.discount)+'</div>':'')+'</td><td><span class="badge '+(o.paymentType==='COD'?'bc':'by')+'">'+o.paymentType+'</span>'+(o.advanceRequired==='Yes'?'<span class="badge br" style="margin-left:4px;font-size:9px">ADV</span>':'')+'</td><td style="font-size:10px;color:#22d3ee">'+(o.eyNumber||'-')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td style="white-space:nowrap">'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({status:statusF,date:dateF});}
 function renderSalesOrderForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">New Sales Order</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Customer Name *</label><input type="text" class="input" id="soName" placeholder="Customer name"></div><div class="fcol"><label class="label">Phone *</label><input type="text" class="input" id="soPhone" placeholder="Phone number"></div></div><div id="soDupWarn"></div><div class="fcol"><label class="label">Address *</label><textarea class="textarea" id="soAddress" rows="2" placeholder="Full delivery address"></textarea></div><div class="frow"><div class="fcol"><label class="label">Pincode *</label><input type="text" class="input" id="soPincode" placeholder="6-digit pincode" oninput="if(this.value.length===6)lookupPincodeUI()"><div id="pincodeStatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div><div class="fcol"><label class="label">Post Office *</label><select class="select" id="soPostOffice"><option value="">-- Fetch by Pincode --</option></select><div style="margin-top:6px"><input type="text" class="input" id="manualPO" placeholder="Or type post office name manually" oninput="syncManualPO(this.value)"></div></div></div><input type="hidden" id="soState"><div class="frow"><div class="fcol"><label class="label">Grams *</label><select class="select" id="soGrams" onchange="updatePricing()"><option value="">-- Select --</option>'+Object.keys(PRICES).map(function(g){return '<option value="'+g+'">'+(g=='1000'?'1kg':g+'gm')+'</option>';}).join('')+'</select></div><div class="fcol"><label class="label">Bottle Option</label><select class="select" id="soMultiple" onchange="updatePricing()"><option value="0">Direct Size</option><option value="1">Multiple Bottles (discount)</option></select></div></div><div id="soPriceCard"></div><div class="frow"><div class="fcol"><label class="label">Payment Type</label><select class="select" id="soPayType" onchange="toggleScreenshot()"><option value="COD">COD</option><option value="Prepaid">Prepaid</option><option value="Advance">Advance</option></select></div></div><div id="soScreenshotWrap" style="display:none"><div class="fcol"><label class="label">Payment Screenshot URL *</label><input type="text" class="input" id="soScreenshot" placeholder="Paste screenshot URL"></div></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="soNotes" placeholder="Optional"></div><button class="btn btn-p btn-full" id="soSubmitBtn" onclick="submitSalesOrderUI()" style="padding:13px">Submit Order</button><div id="soStatus"></div></div><div class="card"><div class="card-title">My Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myOrdersWrap"><div class="empty-state"><div>Click Load</div></div></div></div>';}
-async function lookupPincodeUI(){
+function lookupPincodeUI(){
   var pin=document.getElementById('soPincode').value.trim();
-  if(pin.length!==6||!/^[0-9]{6}$/.test(pin))return;
+  if(pin.length!==6||isNaN(Number(pin)))return;
   var st=document.getElementById('pincodeStatus');
   var sel=document.getElementById('soPostOffice');
   var stateEl=document.getElementById('soState');
-  if(st){st.textContent='Fetching...';st.style.color='var(--text3)';}
-  try{
-    var r=await fetch('https://api.postalpincode.in/pincode/'+pin);
-    var data=await r.json();
-    if(!data||!data[0]||data[0].Status!=='Success'||!data[0].PostOffice||!data[0].PostOffice.length){
-      if(st){st.textContent='Not found';st.style.color='#f87171';}
-      if(sel)sel.innerHTML='<option value="">-- Not found --</option>';
-      return;
-    }
-    var offices=data[0].PostOffice;
-    var first=offices[0];
-    // Set state and district
-    if(stateEl)stateEl.value=first.State||'';
-    if(st){st.textContent=first.District+', '+first.State;st.style.color='#34d399';}
-    // Populate post office dropdown
-    if(sel){
-      sel.innerHTML='<option value="">-- Select Post Office --</option>'+
-        offices.map(function(o){
-          return '<option value="'+o.Name+'">'+o.Name+(o.BranchType?' ('+o.BranchType+')':'')+'</option>';
-        }).join('');
-      // Auto-select if only one
-      if(offices.length===1)sel.value=offices[0].Name;
-    }
-    // Auto-fill pincode display
-    var pSt=document.getElementById('pincodeStatus2');
-    if(!pSt&&sel){
-      // Show district info below field
-      var existing=document.getElementById('pincodeInfo');
-      if(!existing){
-        var info=document.createElement('div');
-        info.id='pincodeInfo';
-        info.style.cssText='font-size:11px;color:#34d399;margin-top:4px';
-        sel.parentNode.insertBefore(info,sel);
+  if(st){st.textContent='🔍 Fetching...';st.style.color='var(--text3)';}
+  if(sel)sel.innerHTML='<option value="">Loading...</option>';
+
+  // Try browser fetch first (postalpincode.in), fallback to GAS
+  fetch('https://api.postalpincode.in/pincode/'+pin)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data&&data[0]&&data[0].Status==='Success'&&data[0].PostOffice&&data[0].PostOffice.length){
+        var offices=data[0].PostOffice;
+        var first=offices[0];
+        if(stateEl)stateEl.value=first.State||'';
+        if(st){st.textContent='✅ '+first.District+', '+first.State;st.style.color='#34d399';}
+        if(sel){
+          sel.innerHTML='<option value="">-- Select Post Office --</option>'+
+            offices.map(function(o){return '<option value="'+o.Name+'">'+o.Name+(o.BranchType?' ('+o.BranchType+')':'')+'</option>';}).join('');
+          if(offices.length===1)sel.value=offices[0].Name;
+        }
+      } else {
+        throw new Error('Not found in browser API');
       }
-      document.getElementById('pincodeInfo').textContent=first.District+' District, '+first.State;
-    }
-  }catch(e){
-    if(st){st.textContent='Error: '+e.message;st.style.color='#f87171';}
-  }
+    })
+    .catch(function(){
+      // Fallback to GAS (works reliably server-side)
+      if(st){st.textContent='🔍 Searching...';st.style.color='var(--text3)';}
+      google.script.run
+        .withSuccessHandler(function(r){
+          if(!r||!r.success){
+            if(st){st.textContent='📍 Type post office manually';st.style.color='#f59e0b';}
+            if(sel)sel.innerHTML='<option value="">-- Type manually below --</option>';
+            var mpo=document.getElementById('manualPO');
+            if(mpo)mpo.style.display='block';
+            return;
+          }
+          if(stateEl)stateEl.value=r.state||'';
+          if(st){st.textContent='✅ '+r.district+', '+r.state;st.style.color='#34d399';}
+          if(sel){
+            sel.innerHTML='<option value="">-- Select Post Office --</option>'+
+              (r.offices||[]).map(function(o){return '<option value="'+o.name+'">'+o.name+(o.branchType?' ('+o.branchType+')':'')+'</option>';}).join('');
+            if(r.offices&&r.offices.length===1)sel.value=r.offices[0].name;
+          }
+        })
+        .withFailureHandler(function(e){
+          if(st){st.textContent='⚠️ API error — type post office manually';st.style.color='#f87171';}
+          if(sel)sel.innerHTML='<option value="">-- Type manually below --</option>';
+          var mpo=document.getElementById('manualPO');
+          if(mpo)mpo.style.display='block';
+        })
+        .lookupPincode(pin);
+    });
 }
 function updatePricing(){var grams=parseInt(document.getElementById('soGrams').value)||0;var useMultiple=document.getElementById('soMultiple').value==='1';var el=document.getElementById('soPriceCard');if(!el)return;if(!grams){el.innerHTML='';return;}var p=calcPricing(grams,useMultiple);if(!p){el.innerHTML='';return;}var discountLine=p.discount>0?'<div class="price-row"><span style="color:#f87171">Discount ('+(p.boxes.indexOf(200)!==-1?'15%':'20%')+')</span><span class="discount-tag">-'+fnr(p.discount)+'</span></div>':'';var payType=document.getElementById('soPayType')?document.getElementById('soPayType').value:'COD';
     var codLine=payType==='COD'?'<div class="price-row"><span style="color:#f87171">COD Charge</span><span style="color:#f87171">+'+fnr(p.codCharge)+'</span></div>':'';
@@ -1755,38 +1765,56 @@ function showToast(msg, type){
 }
 
 
-async function lookupDEPincode(){
+function lookupDEPincode(){
   var pin=document.getElementById('dePincode').value.trim();
-  if(pin.length!==6)return;
+  if(pin.length!==6||isNaN(Number(pin)))return;
   var el=document.getElementById('dePincodeResult');
   if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Looking up '+pin+'...</div>';
-  try{
-    var r=await fetch('https://api.postalpincode.in/pincode/'+pin);
-    var data=await r.json();
-    if(!data||!data[0]||data[0].Status!=='Success'){
-      if(el)el.innerHTML='<div class="err-msg">Pincode '+pin+' not found</div>';
-      return;
-    }
-    var offices=data[0].PostOffice;
-    var first=offices[0];
+
+  function renderOffices(offices,district,state){
     var h='<div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:12px;padding:12px">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
       '<div><span style="font-size:18px;font-weight:900;color:#fb923c">'+pin+'</span> &nbsp;'+
-      '<span style="font-size:12px;color:var(--text2)">'+first.District+', '+first.State+'</span></div>'+
-      '<span class="badge bg">'+offices.length+' offices</span></div>'+
-      '<div class="table-scroll"><table><thead><tr><th>Post Office</th><th>Type</th><th>Division</th><th>Phone</th></tr></thead><tbody>'+
+      '<span style="font-size:12px;color:var(--text2)">'+district+', '+state+'</span></div>'+
+      '<span class="badge bg">'+offices.length+' office'+(offices.length!==1?'s':'')+'</span></div>'+
+      '<div class="table-scroll"><table><thead><tr><th>Post Office</th><th>Type</th><th>Division</th></tr></thead><tbody>'+
       offices.map(function(o){
-        return '<tr><td style="font-weight:700">'+o.Name+'</td>'+
-          '<td><span class="badge '+(o.BranchType==='Head Post Office'?'by':o.BranchType==='Sub Post Office'?'bg':'bc')+'">'+
-          (o.BranchType||'-').replace(' Post Office','')+'</span></td>'+
-          '<td style="font-size:11px;color:var(--text3)">'+o.Division+'</td>'+
-          '<td style="font-size:11px">'+o.Phone+'</td></tr>';
+        var nm=o.Name||o.name||'';
+        var bt=o.BranchType||o.branchType||'-';
+        var div=o.Division||o.division||'-';
+        var clr=bt.indexOf('Head')!==-1?'by':bt.indexOf('Sub')!==-1?'bg':'bc';
+        return '<tr><td style="font-weight:700">'+nm+'</td>'+
+          '<td><span class="badge '+clr+'">'+bt.replace(' Post Office','')+'</span></td>'+
+          '<td style="font-size:11px;color:var(--text3)">'+div+'</td></tr>';
       }).join('')+
       '</tbody></table></div></div>';
     if(el)el.innerHTML=h;
-  }catch(e){
-    if(el)el.innerHTML='<div class="err-msg">Error: '+e.message+'</div>';
   }
+
+  // Try browser first
+  fetch('https://api.postalpincode.in/pincode/'+pin)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data&&data[0]&&data[0].Status==='Success'&&data[0].PostOffice&&data[0].PostOffice.length){
+        var po=data[0].PostOffice;
+        renderOffices(po,po[0].District,po[0].State);
+      } else throw new Error('Not found');
+    })
+    .catch(function(){
+      // Fallback to GAS
+      google.script.run
+        .withSuccessHandler(function(r){
+          if(!r||!r.success){
+            if(el)el.innerHTML='<div class="err-msg">Pincode '+pin+' not found</div>';
+            return;
+          }
+          renderOffices(r.offices||[],r.district,r.state);
+        })
+        .withFailureHandler(function(e){
+          if(el)el.innerHTML='<div class="err-msg">Error: '+(e.message||'Failed')+'</div>';
+        })
+        .lookupPincode(pin);
+    });
 }
 
 window.onload = function() {

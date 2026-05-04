@@ -1868,51 +1868,90 @@ function lookupDEPincode(){
 }
 
 function editOrderAdmin(orderId){
-  // Load order and show inline edit form
-  google.script.run
-    .withSuccessHandler(function(orders){
-      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
-      if(!o){showToast('Order not found','red');return;}
-      // Build modal
-      var modal=document.getElementById('editOrderModal');
-      if(!modal){
-        modal=document.createElement('div');
-        modal.id='editOrderModal';
-        modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
-        document.body.appendChild(modal);
-      }
-      modal.innerHTML='<div style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:20px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
-        '<div style="font-weight:800;font-size:15px">✎ Edit Order #'+o.series+'</div>'+
-        '<button onclick="closeEditModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>'+
-        '</div>'+
-        '<div class="form-group"><label class="label">Customer Name</label><input type="text" class="input" id="edit_name" value="'+o.customerName+'"></div>'+
-        '<div class="form-group"><label class="label">Phone</label><input type="text" class="input" id="edit_phone" value="'+o.phone+'"></div>'+
-        '<div class="form-group"><label class="label">Address</label><textarea class="input" id="edit_address" rows="2">'+o.address+'</textarea></div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
-        '<div class="form-group"><label class="label">Pincode</label><input type="text" class="input" id="edit_pincode" value="'+o.pincode+'" maxlength="6" oninput="if(this.value.length===6)lookupEditPincode()"></div>'+
-        '<div class="form-group"><label class="label">State</label><input type="text" class="input" id="edit_state" value="'+(o.state||'')+'"></div>'+
-        '</div>'+
-        '<div class="form-group"><label class="label">Post Office</label><input type="text" class="input" id="edit_postoffice" value="'+o.postOffice+'"><div id="edit_pstatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
-        '<div class="form-group"><label class="label">Grams</label><select class="select" id="edit_grams">'+
-        Object.keys(PRICES).map(function(g){return '<option value="'+g+'"'+(String(o.grams)===String(g)?' selected':'')+'>'+
-          (g==='1000'?'1kg':g+'gm')+'</option>';}).join('')+
-        '</select></div>'+
-        '<div class="form-group"><label class="label">Payment Type</label><select class="select" id="edit_paytype">'+
-        ['COD','Prepaid','Advance'].map(function(p){return '<option value="'+p+'"'+(o.paymentType===p?' selected':'')+'>'+p+'</option>';}).join('')+
-        '</select></div>'+
-        '</div>'+
-        '<div class="form-group"><label class="label">Notes</label><input type="text" class="input" id="edit_notes" value="'+(o.notes||'')+'"></div>'+
-        '<div id="edit_status" style="margin-bottom:10px"></div>'+
-        '<div style="display:flex;gap:10px">'+
-        '<button onclick="saveEditAdmin(\''+orderId+'\',\''+o.series+'\')" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">💾 Save Changes</button>'+
-        '<button onclick="closeEditModal()" class="btn" style="padding:12px 16px;background:var(--surface2)">Cancel</button>'+
-        '</div></div>';
-      modal.style.display='flex';
-    })
-    .getSalesOrders({});
+  // Get order from cached data - NO API CALL
+  var allOrders = [];
+  if(S.data){
+    if(S.data.myOrders) allOrders = allOrders.concat(S.data.myOrders);
+    if(S.data.allOrders) allOrders = allOrders.concat(S.data.allOrders);
+    if(S.data.salesOrders) allOrders = allOrders.concat(S.data.salesOrders);
+  }
+  var o = allOrders.find(function(x){return x.orderId===orderId;});
+  if(!o){
+    // Only fallback to API if not in cache
+    google.script.run
+      .withSuccessHandler(function(orders){
+        var found = orders&&orders.find(function(x){return x.orderId===orderId;});
+        if(!found){showToast('Order not found','red');return;}
+        openEditModal(found);
+      })
+      .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+      .getSalesOrders({});
+    return;
+  }
+  openEditModal(o);
 }
+
+function openEditModal(o){
+  var orderId = o.orderId;
+  var modal = document.getElementById('editOrderModal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'editOrderModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
+    document.body.appendChild(modal);
+  }
+
+  var gramsOpts = Object.keys(PRICES).map(function(g){
+    return '<option value="'+g+'"'+(String(o.grams)===String(g)?' selected':'')+'>'+
+      (g==='1000'?'1kg':g+'gm')+' — ₹'+PRICES[g].selling+'</option>';
+  }).join('');
+
+  var payOpts = ['COD','Prepaid','Advance'].map(function(p){
+    return '<option value="'+p+'"'+(o.paymentType===p?' selected':'')+'>'+p+'</option>';
+  }).join('');
+
+  modal.setAttribute('data-edit-id', orderId);
+  modal.setAttribute('data-edit-series', o.series);
+  modal.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:20px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+    '<div style="font-weight:900;font-size:16px;color:var(--text)">✎ Edit Order #'+o.series+'</div>'+
+    '<button onclick="closeEditModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">✕</button>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div class="form-group" style="grid-column:1/-1"><label class="label">Customer Name *</label>'+
+    '<input type="text" class="input" id="edit_name" value="'+(o.customerName||'')+'" placeholder="Full name"></div>'+
+    '<div class="form-group"><label class="label">Phone *</label>'+
+    '<input type="text" class="input" id="edit_phone" value="'+(o.phone||'')+'" maxlength="10"></div>'+
+    '<div class="form-group"><label class="label">Payment Type</label>'+
+    '<select class="select" id="edit_paytype">'+payOpts+'</select></div>'+
+    '</div>'+
+    '<div class="form-group"><label class="label">Address *</label>'+
+    '<textarea class="input" id="edit_address" rows="2" style="resize:none">'+(o.address||'')+'</textarea></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div class="form-group"><label class="label">Pincode *</label>'+
+    '<input type="text" class="input" id="edit_pincode" value="'+(o.pincode||'')+'" maxlength="6" placeholder="6 digits" oninput="if(this.value.length===6)lookupEditPincode()">'+
+    '<div id="edit_pstatus" style="font-size:10px;color:var(--text3);margin-top:3px"></div></div>'+
+    '<div class="form-group"><label class="label">State</label>'+
+    '<input type="text" class="input" id="edit_state" value="'+(o.state||'')+'"></div>'+
+    '</div>'+
+    '<div class="form-group"><label class="label">Post Office *</label>'+
+    '<input type="text" class="input" id="edit_postoffice" value="'+(o.postOffice||'')+'" placeholder="Post office name"></div>'+
+    '<div class="form-group"><label class="label">Grams *</label>'+
+    '<select class="select" id="edit_grams">'+gramsOpts+'</select></div>'+
+    '<div class="form-group"><label class="label">Notes</label>'+
+    '<input type="text" class="input" id="edit_notes" value="'+(o.notes||'')+'" placeholder="Optional"></div>'+
+    '<div id="edit_status" style="min-height:16px;margin-bottom:8px"></div>'+
+    '<div style="display:flex;gap:10px">'+
+    '<button onclick="saveEditAdmin()" class="btn btn-p" style="flex:1;padding:13px;font-size:14px;font-weight:700">💾 Save Changes</button>'+
+    '<button onclick="closeEditModal()" class="btn" style="padding:13px 16px;background:var(--surface2);color:var(--text2)">Cancel</button>'+
+    '</div></div>';
+
+  modal.style.display = 'flex';
+  // Focus first field
+  setTimeout(function(){var n=document.getElementById('edit_name');if(n)n.focus();},100);
+}
+
 
 function lookupEditPincode(){
   var pin=document.getElementById('edit_pincode').value.trim();
@@ -1942,7 +1981,11 @@ function lookupEditPincode(){
     });
 }
 
-function saveEditAdmin(orderId,series){
+function saveEditAdmin(){
+  var modal=document.getElementById('editOrderModal');
+  var orderId=modal?modal.getAttribute('data-edit-id'):'';
+  var series=modal?modal.getAttribute('data-edit-series'):'';
+  if(!orderId){showToast('No order selected','red');return;}
   var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
   var data={
     orderId:orderId,

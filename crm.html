@@ -1122,7 +1122,48 @@ function submitSalesOrderUI(){var g=function(id){var el=document.getElementById(
   if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,brand:S.user.brand,customerName:name,phone:phone,address:address,pincode:pincode,state:state,postOffice:postOffice,grams:grams,useMultiple:g('soMultiple')==='1',paymentType:payType,screenshotUrl:screenshot,notes:g('soNotes').trim()};google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(r.success){
           var isEdit=editId&&editId.length>0;
           if(st)st.innerHTML='<div class="ok-msg">'+(isEdit?'Order #'+(editSeries||r.series)+' updated!':'Order #'+r.series+' submitted!')+(r.advanceRequired?' Advance required.':'')+'</div>';
-          if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';}).submitSalesOrder(data);}
+          if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';});
+  // Route to update or create based on edit mode
+  if(editId){
+    google.script.run.withSuccessHandler(function(r){
+      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+      if(r&&r.success){
+        if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated successfully!</div>';
+        if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}
+        ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+        var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
+        var st2=document.getElementById('soStatus');if(st2)st2.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated!</div>';
+        loadMyOrdersTable();
+      }else{
+        if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Update failed')+'</div>';
+      }
+    }).withFailureHandler(function(e){
+      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+      if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
+    }).updateSalesOrder(data);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(r){
+        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+        if(r&&r.success){
+          if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' submitted!'+(r.advanceRequired?' Advance required.':'')+'</div>';
+          ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+          var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
+          loadMyOrdersTable();
+        }else{
+          if(st){
+            if(r&&r.duplicate)st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';
+            else st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Error submitting')+'</div>';
+          }
+        }
+      })
+      .withFailureHandler(function(e){
+        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+        if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
+      })
+      .submitSalesOrder(data);
+  }
+}
 function loadMyOrdersTable(){
   var el=document.getElementById('myOrdersWrap');if(!el)return;
   var statusF=document.getElementById('myOrdStatusF')?document.getElementById('myOrdStatusF').value:'';
@@ -1541,21 +1582,24 @@ function renderConfOrders(orders){
   var el=document.getElementById('confOrdersWrap');if(!el)return;
   if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders match filters</div></div>';return;}
   var h='<div class="table-scroll"><table><thead><tr>'+
-    '<th>#</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>Agent</th><th>Actions</th>'+
+    '<th>#</th><th>Customer</th><th>Phone</th><th>Address</th><th>Grams</th><th>Amount</th><th>Type</th><th>Status</th><th>Actions</th>'+
     '</tr></thead><tbody>';
   orders.forEach(function(o){
     var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+    var addrShort=(o.address||'').substring(0,25)+((o.address||'').length>25?'...':'');
     h+='<tr>'+
       '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
-      '<td style="font-weight:700">'+o.customerName+'</td>'+
-      '<td style="color:var(--text3)">'+o.phone+'</td>'+
+      '<td style="font-weight:700">'+o.customerName+'<br><span style="font-size:10px;color:var(--text3)">'+o.phone+'</span></td>'+
+      '<td style="font-size:10px;color:var(--text2);max-width:120px" title="'+o.address+'">'+addrShort+'<br>'+o.pincode+' '+o.postOffice+'</td>'+
       '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
       '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
       '<td><span class="badge '+payClr+'">'+o.paymentType+'</span>'+(o.paymentType==='Prepaid'?'<br><span style="font-size:9px;color:#34d399">✅ Paid</span>':'')+'</td>'+
-      '<td style="font-size:11px">'+o.empName+'</td>'+
+      '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span><br><span style="font-size:10px;color:var(--text3)">'+o.empName+'</span></td>'+
       '<td style="white-space:nowrap">'+
-      '<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 10px;font-size:10px;margin-right:4px">✓ Confirm</button>'+
-      '<button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 10px;font-size:10px">✗ Reject</button>'+
+      '<button onclick="editOrderAdmin(\''+o.orderId+'\')" class="btn" style="padding:4px 8px;font-size:10px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c;margin-bottom:3px;display:block;width:100%">✎ Edit</button>'+
+      (o.status==='Pending'?
+        '<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 8px;font-size:10px;margin-bottom:3px;display:block;width:100%">✓ Confirm</button>'+
+        '<button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 8px;font-size:10px;display:block;width:100%">✗ Reject</button>':'')+
       '</td></tr>';
   });
   h+='</tbody></table></div>';
@@ -1652,11 +1696,11 @@ function renderLabelQueueTable(orders){
     '</tr></thead><tbody>';
   orders.forEach(function(o){
     var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
-    var actions='';
+    var actions='<button onclick="editOrderAdmin(\''+o.orderId+'\')" class="btn" style="padding:3px 7px;font-size:10px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);color:#fb923c;display:block;margin-bottom:3px">✎ Edit</button>';
     if(o.status==='Confirmed'){
-      actions='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">EY+Label</button>';
+      actions+='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">EY+Label</button>';
     } else if(o.status==='Label Generated'){
-      actions='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:3px">🖨️</button>'+
+      actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:3px">🖨️</button>'+
               '<button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Dispatch</button>';
     }
     h+='<tr>'+
@@ -1815,6 +1859,124 @@ function lookupDEPincode(){
         })
         .lookupPincode(pin);
     });
+}
+
+function editOrderAdmin(orderId){
+  // Load order and show inline edit form
+  google.script.run
+    .withSuccessHandler(function(orders){
+      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
+      if(!o){showToast('Order not found','red');return;}
+      // Build modal
+      var modal=document.getElementById('editOrderModal');
+      if(!modal){
+        modal=document.createElement('div');
+        modal.id='editOrderModal';
+        modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+        document.body.appendChild(modal);
+      }
+      modal.innerHTML='<div style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:20px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+        '<div style="font-weight:800;font-size:15px">✎ Edit Order #'+o.series+'</div>'+
+        '<button onclick="closeEditModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>'+
+        '</div>'+
+        '<div class="form-group"><label class="label">Customer Name</label><input type="text" class="input" id="edit_name" value="'+o.customerName+'"></div>'+
+        '<div class="form-group"><label class="label">Phone</label><input type="text" class="input" id="edit_phone" value="'+o.phone+'"></div>'+
+        '<div class="form-group"><label class="label">Address</label><textarea class="input" id="edit_address" rows="2">'+o.address+'</textarea></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+        '<div class="form-group"><label class="label">Pincode</label><input type="text" class="input" id="edit_pincode" value="'+o.pincode+'" maxlength="6" oninput="if(this.value.length===6)lookupEditPincode()"></div>'+
+        '<div class="form-group"><label class="label">State</label><input type="text" class="input" id="edit_state" value="'+(o.state||'')+'"></div>'+
+        '</div>'+
+        '<div class="form-group"><label class="label">Post Office</label><input type="text" class="input" id="edit_postoffice" value="'+o.postOffice+'"><div id="edit_pstatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+        '<div class="form-group"><label class="label">Grams</label><select class="select" id="edit_grams">'+
+        Object.keys(PRICES).map(function(g){return '<option value="'+g+'"'+(String(o.grams)===String(g)?' selected':'')+'>'+
+          (g==='1000'?'1kg':g+'gm')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="form-group"><label class="label">Payment Type</label><select class="select" id="edit_paytype">'+
+        ['COD','Prepaid','Advance'].map(function(p){return '<option value="'+p+'"'+(o.paymentType===p?' selected':'')+'>'+p+'</option>';}).join('')+
+        '</select></div>'+
+        '</div>'+
+        '<div class="form-group"><label class="label">Notes</label><input type="text" class="input" id="edit_notes" value="'+(o.notes||'')+'"></div>'+
+        '<div id="edit_status" style="margin-bottom:10px"></div>'+
+        '<div style="display:flex;gap:10px">'+
+        '<button onclick="saveEditAdmin(\''+orderId+'\',\''+o.series+'\')" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">💾 Save Changes</button>'+
+        '<button onclick="closeEditModal()" class="btn" style="padding:12px 16px;background:var(--surface2)">Cancel</button>'+
+        '</div></div>';
+      modal.style.display='flex';
+    })
+    .getSalesOrders({});
+}
+
+function lookupEditPincode(){
+  var pin=document.getElementById('edit_pincode').value.trim();
+  if(pin.length!==6)return;
+  var pst=document.getElementById('edit_pstatus');
+  if(pst)pst.textContent='Searching...';
+  fetch('https://api.postalpincode.in/pincode/'+pin)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data&&data[0]&&data[0].Status==='Success'&&data[0].PostOffice&&data[0].PostOffice.length){
+        var po=data[0].PostOffice[0];
+        var stEl=document.getElementById('edit_state');
+        if(stEl)stEl.value=po.State||'';
+        var poEl=document.getElementById('edit_postoffice');
+        if(poEl&&!poEl.value)poEl.value=po.Name;
+        if(pst)pst.textContent='✅ '+po.District+', '+po.State;
+      }
+    })
+    .catch(function(){
+      google.script.run.withSuccessHandler(function(r){
+        if(r&&r.success){
+          var stEl=document.getElementById('edit_state');
+          if(stEl)stEl.value=r.state||'';
+          if(pst)pst.textContent='✅ '+r.district+', '+r.state;
+        }
+      }).lookupPincode(pin);
+    });
+}
+
+function saveEditAdmin(orderId,series){
+  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+  var data={
+    orderId:orderId,
+    customerName:g('edit_name'),
+    phone:g('edit_phone'),
+    address:g('edit_address'),
+    pincode:g('edit_pincode'),
+    state:g('edit_state'),
+    postOffice:g('edit_postoffice'),
+    grams:parseInt(g('edit_grams'))||0,
+    paymentType:g('edit_paytype'),
+    notes:g('edit_notes')
+  };
+  var st=document.getElementById('edit_status');
+  if(!data.customerName||!data.phone||!data.address||!data.pincode||!data.grams){
+    if(st)st.innerHTML='<div class="err-msg">Fill all required fields</div>';return;
+  }
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Saving...</div>';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.success){
+        showToast('✅ Order #'+series+' updated!','green');
+        document.getElementById('editOrderModal').style.display='none';
+        // Refresh all relevant views
+        if(typeof loadConfPendingOrders==='function')loadConfPendingOrders();
+        if(typeof loadLabelQueue==='function')loadLabelQueue();
+        if(typeof loadSalesOrdersTable==='function')loadSalesOrdersTable();
+        if(typeof loadMyOrdersTable==='function')loadMyOrdersTable();
+      } else {
+        if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Update failed')+'</div>';
+      }
+    })
+    .withFailureHandler(function(e){
+      if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
+    })
+    .updateSalesOrder(data);
+}
+function closeEditModal(){
+  var m=document.getElementById('editOrderModal');
+  if(m)m.style.display='none';
 }
 
 window.onload = function() {

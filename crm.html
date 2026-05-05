@@ -1921,12 +1921,12 @@ function submitEYBatch(){
   var raw=document.getElementById('eyBatch').value.trim();
   var st=document.getElementById('eyBatchStatus');
   if(!raw){if(st)st.innerHTML='<div class="err-msg">Enter EY numbers</div>';return;}
-  var nums=raw.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
+  var nums=raw.split('\n').map(function(s){return s.trim().toUpperCase();}).filter(function(s){return s.length>=8;});
   if(!nums.length){if(st)st.innerHTML='<div class="err-msg">No valid EY numbers</div>';return;}
   if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Adding '+nums.length+' numbers...</div>';
   google.script.run
     .withSuccessHandler(function(r){
-      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ Added '+nums.length+' EY numbers!</div>':'<div class="err-msg">'+r.msg+'</div>';
+      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ '+(r.msg||'Added '+r.added+' EY numbers!')+'</div>':'<div class="err-msg">'+(r.msg||'Failed')+'</div>';
       if(r.success){var el=document.getElementById('eyBatch');if(el)el.value='';}
     })
     .addEYBatch(nums, S.user.empId);

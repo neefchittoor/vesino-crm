@@ -695,7 +695,8 @@ var GAS_MAP = {
   markAllNotificationsSeen: function(a){return{empId:a[0]};},
   markNotificationSeen: function(a){return{notifId:a[0]};},
   sendReminder: function(a){return{missing:a[0]};},
-  sendMonthlySalaryEmails: function(a){return{};}
+  sendMonthlySalaryEmails: function(a){return{};},
+  updateSalesOrder: function(a){return a[0]||{};}
 };
 
 function makeChain(sFn, fFn) {

@@ -410,10 +410,16 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.025
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
 
-@keyframes shimmer{
-  0%{background:var(--surface2)}
-  50%{background:rgba(255,255,255,.06)}
-  100%{background:var(--surface2)}
+@media print {
+  body * { visibility: hidden !important; }
+  #printableLabel, #printableLabel * { visibility: visible !important; }
+  #printableLabel {
+    position: fixed !important; left: 0 !important; top: 0 !important;
+    width: 185mm !important; border: 1.5px solid #000 !important;
+    margin: 0 !important; font-size: 11pt !important;
+    background: white !important; color: black !important;
+  }
+  @page { margin: 4mm; size: A5 landscape; }
 }
 </style>
 </head>
@@ -695,8 +701,7 @@ var GAS_MAP = {
   markAllNotificationsSeen: function(a){return{empId:a[0]};},
   markNotificationSeen: function(a){return{notifId:a[0]};},
   sendReminder: function(a){return{missing:a[0]};},
-  sendMonthlySalaryEmails: function(a){return{};},
-  updateSalesOrder: function(a){return a[0]||{};}
+  sendMonthlySalaryEmails: function(a){return{};}
 };
 
 function makeChain(sFn, fFn) {
@@ -863,23 +868,19 @@ function doLogin(){
 function doLogout(){try{localStorage.removeItem(S.SK);}catch(e){}if(S.timer)clearInterval(S.timer);S.user=null;S.data=null;document.getElementById('app').style.display='none';document.getElementById('loginPage').style.display='block';}
 function initApp(){
   S.user.isAdmin=S.user.isAdmin||(S.user.role&&S.user.role.toLowerCase()==='admin')||S.user.empId==='ADMIN';
-  // Show app INSTANTLY - skeleton renders immediately
-  ['loadScreen','splashScreen','onboardScreen','loginPage'].forEach(function(id){
-    var el=document.getElementById(id);if(el)el.style.display='none';
-  });
-  var app=document.getElementById('app');
-  if(app){app.style.display='flex';app.style.flexDirection='row';}
   buildSidebar();
-  setInterval(setLiveTime,60000);setLiveTime();
-  var startPage=S.user.isAdmin?'dashboard':S.user.role==='Confirmation'?'confirmation':S.user.role==='DataEntry'?'dataentry':'myDash';
-  switchPage(startPage); // Show skeleton immediately
-  // Fetch data in background
   loadData(function(){
-    switchPage(startPage); // Re-render with real data
-    S.timer=setInterval(refreshData,600000);
+    ['loadScreen','splashScreen','onboardScreen','loginPage'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
+    ['loadScreen','splashScreen','onboardScreen','loginPage'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
+    var app=document.getElementById('app');if(app){app.style.display='flex';app.style.flexDirection='row';}
+    setInterval(setLiveTime,60000);setLiveTime();
+    var start=S.user.isAdmin?'dashboard':S.user.role==='Confirmation'?'confirmation':S.user.role==='DataEntry'?'dataentry':'myDash';
+    // Show bot only for Sales team
+    var botFab=document.getElementById('botFab');
+    if(botFab)botFab.style.display=(S.user.role==='Sales'&&!S.user.isAdmin)?'flex':'none';
+    switchPage(start);S.timer=setInterval(refreshData,600000);
   });
 }
-
 function buildSidebar(){
   var role=S.user.role;var isAdmin=S.user.isAdmin;var nav=[];
   if(isAdmin){nav=[{sec:'Overview'},{id:'dashboard',icon:'&#x1F4CA;',label:'Dashboard'},{sec:'Sales'},{id:'orders',icon:'&#x1F4CB;',label:'Daily Orders'},{id:'salesOrders',icon:'&#x1F6D2;',label:'Sales Orders'},{id:'enquiries',icon:'&#x1F4F2;',label:'Enquiries'},{id:'performance',icon:'&#x1F3C6;',label:'Performance'},{id:'returns',icon:'&#x21A9;',label:'Returns'},{sec:'Delivery'},{id:'labelGen',icon:'&#x1F3F7;',label:'Label Generation'},{id:'eyManage',icon:'&#x1F4EE;',label:'EY Numbers'},{id:'ofdDash',icon:'&#x1F69A;',label:'OFD Dashboard'},{sec:'People'},{id:'attendance',icon:'&#x1F4C5;',label:'Attendance'},{id:'leaves',icon:'&#x1F33F;',label:'Leaves'},{id:'salary',icon:'&#x1F4B0;',label:'Salary'},{sec:'Operations'},{id:'confirmation',icon:'&#x2705;',label:'Confirmation'},{id:'dataentry',icon:'&#x1F4BB;',label:'Data Entry'},{sec:'Data'},{id:'customers',icon:'&#x1F465;',label:'Customers'},{id:'reports',icon:'&#x1F4E7;',label:'Reports'},{id:'chatbot',icon:'&#x1F916;',label:'Order Lookup'},{sec:'System'},{id:'admin',icon:'&#x2699;',label:'Admin'}];}
@@ -1080,210 +1081,101 @@ function updatePricing(){var grams=parseInt(document.getElementById('soGrams').v
 function toggleScreenshot(){var val=document.getElementById('soPayType').value;var wrap=document.getElementById('soScreenshotWrap');if(wrap)wrap.style.display=val==='Advance'?'block':'none';}
 
 function editOrderUI(orderId){
-  // Get from cached data - NO API CALL
-  var allOrders = (S.data&&S.data.myOrders)||[];
-  var o = allOrders.find(function(x){return x.orderId===orderId;});
-
-  if(!o){
-    // Fallback only if not in cache
-    google.script.run
-      .withSuccessHandler(function(orders){
-        var found=orders&&orders.find(function(x){return x.orderId===orderId;});
-        if(!found){showToast('Order not found','red');return;}
-        _fillEditForm(found);
-      })
-      .getSalesOrders({empId:S.user.empId});
-    return;
-  }
-  _fillEditForm(o);
-}
-
-function _fillEditForm(o){
-  var orderId=o.orderId;
-  // Scroll to form
-  var pg=document.getElementById('pg-salesOrders');
-  if(pg)pg.scrollIntoView({behavior:'smooth'});
-  window.scrollTo({top:0,behavior:'smooth'});
-
-  // Pre-fill all fields
-  var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
-  setV('soName',o.customerName);
-  setV('soPhone',o.phone);
-  setV('soAddress',o.address);
-  setV('soPincode',o.pincode);
-  setV('soState',o.state);
-  setV('soNotes',o.notes);
-  setV('soPayType',o.paymentType||'COD');
-  toggleScreenshot();
-
-  // Set post office
-  var sel=document.getElementById('soPostOffice');
-  if(sel){
-    // Add the order's post office as option if not present
-    var exists=false;
-    for(var i=0;i<sel.options.length;i++){
-      if(sel.options[i].value===o.postOffice){exists=true;break;}
-    }
-    if(!exists&&o.postOffice){
-      var opt=document.createElement('option');
-      opt.value=o.postOffice;
-      opt.text=o.postOffice;
-      sel.appendChild(opt);
-    }
-    sel.value=o.postOffice||'';
-  }
-
-  // Set pincode status
-  var pst=document.getElementById('pincodeStatus');
-  if(pst){pst.textContent='✅ '+o.pincode;pst.style.color='#34d399';}
-
-  // Set grams and update pricing
-  var grEl=document.getElementById('soGrams');
-  if(grEl){grEl.value=String(o.grams||'');updatePricing();}
-
-  // Set edit mode on button
-  var btn=document.getElementById('soSubmitBtn');
-  if(btn){
-    btn.textContent='Update Order';
-    btn.style.background='linear-gradient(135deg,#1d4ed8,#3b82f6)';
-    btn.setAttribute('data-edit-id',orderId);
-    btn.setAttribute('data-edit-series',o.series);
-  }
-
-  // Show edit banner
-  var st=document.getElementById('soStatus');
-  if(st)st.innerHTML='<div class="ok-msg" style="background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:#60a5fa">'+
-    '✎ Editing Order #'+o.series+' &nbsp;|&nbsp; '+o.customerName+
-    ' &nbsp;<button onclick="cancelEditOrder()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:12px">✕ Cancel Edit</button></div>';
-
-  // Reload My Orders quietly
-  var mow=document.getElementById('myOrdersWrap');
-  if(mow)mow.innerHTML='<div class="empty-state"><div>Tap Load after submitting update</div></div>';
+  // Load order data and pre-fill form
+  var el=document.getElementById('myOrdersWrap');
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading order...</div>';
+  google.script.run
+    .withSuccessHandler(function(orders){
+      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
+      if(!o){alert('Order not found');return;}
+      // Scroll to form top
+      var pg=document.getElementById('pg-salesOrders');
+      if(pg)pg.scrollIntoView({behavior:'smooth'});
+      // Pre-fill form
+      var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
+      setV('soName',o.customerName);setV('soPhone',o.phone);setV('soAddress',o.address);
+      setV('soPincode',o.pincode);setV('soNotes',o.notes);
+      setV('soPayType',o.paymentType||'COD');toggleScreenshot();
+      // Set grams
+      var gramsVal=o.grams==='1kg'?1000:parseInt(o.grams)||0;
+      var grEl=document.getElementById('soGrams');
+      if(grEl)grEl.value=gramsVal;
+      updatePricing();
+      // Store editing order ID
+      var submitBtn=document.getElementById('soSubmitBtn');
+      if(submitBtn){
+        submitBtn.textContent='Update Order';
+        submitBtn.setAttribute('data-edit-id',orderId);
+        submitBtn.setAttribute('data-edit-series',o.series);
+      }
+      // Show edit banner
+      var st=document.getElementById('soStatus');
+      if(st)st.innerHTML='<div class="ok-msg" style="background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.3);color:#fb923c">&#9998; Editing Order #'+o.series+' — Make changes and tap Update Order <button onclick="cancelEditOrder()" style="background:none;border:none;color:#f87171;cursor:pointer;margin-left:8px">&#x2715; Cancel</button></div>';
+      // Scroll to top of form
+      window.scrollTo({top:0,behavior:'smooth'});
+    })
+    .getSalesOrders({empId:S.user.empId});
 }
 
 function cancelEditOrder(){
-  var btn=document.getElementById('soSubmitBtn');
-  if(btn){
-    btn.textContent='Submit Order';
-    btn.style.background='';
-    btn.removeAttribute('data-edit-id');
-    btn.removeAttribute('data-edit-series');
-    btn.disabled=false;
-  }
-  var st=document.getElementById('soStatus');if(st)st.innerHTML='';
+  var submitBtn=document.getElementById('soSubmitBtn');
+  if(submitBtn){submitBtn.textContent='Submit Order';submitBtn.removeAttribute('data-edit-id');submitBtn.removeAttribute('data-edit-series');}
+  var st=document.getElementById('soStatus');
+  if(st)st.innerHTML='';
+  // Reset form
   ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   var gr=document.getElementById('soGrams');if(gr)gr.value='';
   var pp=document.getElementById('soPriceCard');if(pp)pp.innerHTML='';
-  var sel=document.getElementById('soPostOffice');if(sel)sel.innerHTML='<option value="">-- Fetch by Pincode --</option>';
-  var pst=document.getElementById('pincodeStatus');if(pst)pst.textContent='';
-  showToast('Edit cancelled','orange');
 }
 
-function submitSalesOrderUI(){
-  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
-
-  var name=g('soName');
-  var phone=g('soPhone');
-  var address=g('soAddress');
-  var pincode=g('soPincode');
-  var grams=parseInt(g('soGrams'))||0;
-  var state=g('soState');
-  var payType=g('soPayType')||'COD';
-  var notes=g('soNotes');
-  var screenshot=g('soScreenshot');
-
-  // Post office: manual field takes priority, then dropdown
-  var mpo=document.getElementById('manualPO');
-  var postOffice=(mpo&&mpo.style.display!=='none'&&mpo.value.trim())?mpo.value.trim():g('soPostOffice');
-
-  var btn=document.getElementById('soSubmitBtn');
+function submitSalesOrderUI(){var g=function(id){var el=document.getElementById(id);return el?el.value:'';};var name=g('soName').trim(),phone=g('soPhone').trim(),address=g('soAddress').trim(),pincode=g('soPincode').trim();var _mpo=document.getElementById('manualPO');var postOffice=(_mpo&&_mpo.value.trim())||g('soPostOffice'),grams=parseInt(g('soGrams'))||0,state=g('soState');var st=document.getElementById('soStatus');if(!name||!phone||!address||!pincode||!grams||!postOffice){if(st)st.innerHTML='<div class="err-msg">Fill all required fields</div>';return;}var payType=g('soPayType'),screenshot=g('soScreenshot').trim();if(payType==='Advance'&&!screenshot){if(st)st.innerHTML='<div class="err-msg">Screenshot required for advance</div>';return;}var btn=document.getElementById('soSubmitBtn');
   var editId=btn?btn.getAttribute('data-edit-id'):'';
   var editSeries=btn?btn.getAttribute('data-edit-series'):'';
-  var st=document.getElementById('soStatus');
-
-  // Validation
-  var missing=[];
-  if(!name) missing.push('Customer Name');
-  if(!phone||phone.length<10) missing.push('Phone (10 digits)');
-  if(!address) missing.push('Address');
-  if(!pincode||pincode.length!==6) missing.push('Pincode (6 digits)');
-  if(!grams) missing.push('Grams');
-  if(!postOffice) missing.push('Post Office');
-  if(payType==='Advance'&&!screenshot) missing.push('Screenshot URL');
-
-  if(missing.length>0){
-    if(st)st.innerHTML='<div class="err-msg">Please fill: '+missing.join(', ')+'</div>';
-    return;
-  }
-
-  // Disable button
-  if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}
-  if(st)st.innerHTML='';
-
-  var data={
-    empId:S.user.empId,
-    empName:S.user.name,
-    brand:S.user.brand||'Manveera',
-    date:todayStr(),
-    customerName:name,
-    phone:phone,
-    address:address,
-    pincode:pincode,
-    state:state,
-    postOffice:postOffice,
-    grams:grams,
-    useMultiple:g('soMultiple')==='1',
-    paymentType:payType,
-    screenshotUrl:screenshot,
-    notes:notes
-  };
-
-  function onSuccess(r){
-    if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}
-    if(r&&r.success){
-      var msg=editId?'✅ Order #'+(r.series||editSeries)+' updated!':'✅ Order #'+r.series+' submitted!'+(r.advanceRequired?' — Advance required.':'');
-      if(st)st.innerHTML='<div class="ok-msg">'+msg+'</div>';
-      showToast(msg.replace('✅ ',''),'green');
-      // Reset form
-      if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');}
-      ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){
-        var el=document.getElementById(id);if(el)el.value='';
-      });
-      var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
-      var sel=document.getElementById('soPostOffice');if(sel)sel.innerHTML='<option value="">-- Fetch by Pincode --</option>';
-      if(mpo)mpo.value='';
-      var pst=document.getElementById('pincodeStatus');if(pst)pst.textContent='';
-      // Reload orders list
-      setTimeout(function(){loadMyOrdersTable();},300);
-    } else {
-      if(st){
-        if(r&&r.duplicate) st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';
-        else st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Error occurred')+'</div>';
-      }
-    }
-  }
-
-  function onFail(e){
-    if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}
-    if(st)st.innerHTML='<div class="err-msg">Network error: '+e.message+'</div>';
-    showToast('Network error','red');
-  }
-
-  // Route to update or create
+  if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,brand:S.user.brand,customerName:name,phone:phone,address:address,pincode:pincode,state:state,postOffice:postOffice,grams:grams,useMultiple:g('soMultiple')==='1',paymentType:payType,screenshotUrl:screenshot,notes:g('soNotes').trim()};google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(r.success){
+          var isEdit=editId&&editId.length>0;
+          if(st)st.innerHTML='<div class="ok-msg">'+(isEdit?'Order #'+(editSeries||r.series)+' updated!':'Order #'+r.series+' submitted!')+(r.advanceRequired?' Advance required.':'')+'</div>';
+          if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';});
+  // Route to update or create based on edit mode
   if(editId){
-    data.orderId=editId;
-    google.script.run
-      .withSuccessHandler(onSuccess)
-      .withFailureHandler(onFail)
-      .updateSalesOrder(data);
+    google.script.run.withSuccessHandler(function(r){
+      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+      if(r&&r.success){
+        if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated successfully!</div>';
+        if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}
+        ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+        var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
+        var st2=document.getElementById('soStatus');if(st2)st2.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated!</div>';
+        loadMyOrdersTable();
+      }else{
+        if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Update failed')+'</div>';
+      }
+    }).withFailureHandler(function(e){
+      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+      if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
+    }).updateSalesOrder(data);
   } else {
     google.script.run
-      .withSuccessHandler(onSuccess)
-      .withFailureHandler(onFail)
+      .withSuccessHandler(function(r){
+        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+        if(r&&r.success){
+          if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' submitted!'+(r.advanceRequired?' Advance required.':'')+'</div>';
+          ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+          var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
+          loadMyOrdersTable();
+        }else{
+          if(st){
+            if(r&&r.duplicate)st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';
+            else st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Error submitting')+'</div>';
+          }
+        }
+      })
+      .withFailureHandler(function(e){
+        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
+        if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
+      })
       .submitSalesOrder(data);
   }
 }
-
 function loadMyOrdersTable(){
   var el=document.getElementById('myOrdersWrap');if(!el)return;
   var statusF=document.getElementById('myOrdStatusF')?document.getElementById('myOrdStatusF').value:'';
@@ -1301,237 +1193,239 @@ function loadMyOrdersTable(){
         editBtn='<button onclick="editOrderUI(\'' +o.orderId+ '\')" class="btn" style="padding:4px 8px;font-size:10px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c">&#9998; Edit</button>';
       }
       var payBadge='<span class="badge '+(o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by')+'">'+(o.paymentType||'COD')+'</span>';
-      h+='<tr><td style="color:#fb923c;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td><td style="color:var(--text3)">'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+(o.grams==='1000'?'1kg':o.grams+'gm')+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td><td>'+payBadge+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+editBtn+'</td></tr>';
+      h+='<tr><td style="color:#fb923c;font-weight:700">#'+o.series+'</td><td style="color:var(--text3)">'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+(o.grams==='1000'?'1kg':o.grams+'gm')+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td><td>'+payBadge+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+editBtn+'</td></tr>';
     });
     h+='</tbody></table></div>';
     el.innerHTML=h;
   }).getSalesOrders({empId:S.user.empId,status:statusF});
 }
-function confirmOrderUI(orderId){
-  // Instant optimistic update
-  _setRowStatus(orderId,'Confirmed');
-  showToast('✅ Confirmed!','green');
-  google.script.run
-    .withSuccessHandler(function(r){
-      if(!r||!r.success){
-        _setRowStatus(orderId,'Pending');
-        showToast('Error: '+(r&&r.msg||'Failed'),'red');
-        return;
-      }
-      // Remove row from confirmation view after success
-      setTimeout(function(){ _removeRow(orderId); },600);
-    })
-    .withFailureHandler(function(e){
-      _setRowStatus(orderId,'Pending');
-      showToast('Error: '+e.message,'red');
-    })
-    .confirmOrder(orderId,S.user.name||S.user.empId);
-}
-function rejectOrderUI(orderId){
-  // Show inline reason input
-  var row=document.querySelector('[data-oid="'+orderId+'"]');
-  if(row){
-    var tr=row.closest('tr');
-    if(tr){
-      var td=tr.querySelector('td:last-child');
-      if(td){
-        var existingInput=document.getElementById('rej_'+orderId);
-        if(existingInput){existingInput.remove();return;}
-        var box=document.createElement('div');
-        box.id='rej_'+orderId;
-        box.style.cssText='margin-top:6px;display:flex;gap:4px;align-items:center';
-        var btn_id='rejBtn_'+orderId;
-        box.innerHTML='<input id="rejReason_'+orderId+'" type="text" placeholder="Reason (optional)..." '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 8px;font-size:11px;color:var(--text);outline:none">'+
-          '<button id="'+btn_id+'" style="background:#ef4444;border:none;border-radius:6px;color:white;padding:5px 10px;font-size:10px;cursor:pointer;font-weight:700">✗</button>';
-        // Add click handler separately - no inline JS with orderId
-        setTimeout(function(){
-          var b=document.getElementById(btn_id);
-          if(b)b.onclick=function(){_doReject(orderId);};
-        },10);
-        td.appendChild(box);
-        document.getElementById('rejReason_'+orderId).focus();
-        return;
-      }
-    }
-  }
-  _doReject(orderId,'');
+function confirmOrderUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).confirmOrder(orderId,S.user.name);}
+function rejectOrderUI(orderId){var reason=prompt('Rejection reason:');google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).rejectOrder(orderId,reason||'');}
+function assignEYUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){alert('EY Assigned: '+r.eyNumber);loadSalesOrdersTable();}else{alert('Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
+function markDispatchedUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markDispatched(orderId);}
+function markOFDUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markOrderOFD(orderId);}
+function markDeliveredUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markOrderDelivered(orderId);}
+function deleteSalesOrderUI(orderId){if(!confirm('Delete this order?'))return;google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).deleteSalesOrder(orderId);}
+function renderLabelGen(){
+  var pg=document.getElementById('pg-labelGen');if(!pg)return;
+
+  pg.innerHTML=
+  '<div class="pg-hdr"><div class="pg-title">🏷️ Label Generation</div><div class="pg-sub">CSV Export & Batch Printing</div></div>'+
+
+  // ── Batch Session ──
+  '<div class="card"><div class="card-title">📦 Dispatch Session</div>'+
+  '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">'+
+  '<button onclick="selectSession(this)" data-session="1PM" class="sess-btn" style="padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer">🕐 1 PM Batch</button>'+
+  '<button onclick="selectSession(this)" data-session="6PM" class="sess-btn" style="padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer">🕕 6 PM Batch</button>'+
+  '<button onclick="selectSession(this)" data-session="7PM" class="sess-btn" style="padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer">🕖 7 PM Batch</button>'+
+  '<button onclick="selectSession(this)" data-session="ALL" class="sess-btn active-sess" style="padding:14px;border-radius:12px;background:linear-gradient(135deg,#ea580c,#f97316);border:none;color:white;font-size:14px;font-weight:700;cursor:pointer">📦 All Orders</button>'+
+  '</div>'+
+
+  // ── Filters ──
+  '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
+  '<select class="fsel" id="lgStatus"><option value="Label Generated">Label Generated</option><option value="Confirmed">Confirmed</option><option value="">All Status</option></select>'+
+  '<select class="fsel" id="lgPay"><option value="">All Payment</option><option value="COD">COD</option><option value="Prepaid">Prepaid</option><option value="Advance">Advance</option></select>'+
+  '<select class="fsel" id="lgProd"><option value="">All Products</option><option value="Lehya">Lehya</option><option value="Astra">Astra</option></select>'+
+  '<button class="btn btn-p" onclick="lgLoad()" style="padding:8px 18px">🔄 Load</button>'+
+  '</div></div>'+
+
+  // ── Summary cards ──
+  '<div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">'+
+  '<div class="sc" style="--sc-col:#f97316"><div class="sl">COD</div><div class="sv" id="lgCOD" style="color:#fb923c">—</div></div>'+
+  '<div class="sc" style="--sc-col:#34d399"><div class="sl">Prepaid</div><div class="sv" id="lgPRE" style="color:#34d399">—</div></div>'+
+  '<div class="sc" style="--sc-col:#818cf8"><div class="sl">Advance</div><div class="sv" id="lgADV" style="color:#818cf8">—</div></div>'+
+  '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Total</div><div class="sv" id="lgTOT" style="color:#22d3ee">—</div></div>'+
+  '</div>'+
+
+  // ── Export CSV buttons ──
+  '<div class="card"><div class="card-title">📥 Export CSV (India Post Portal)</div>'+
+  '<div style="display:flex;flex-wrap:wrap;gap:10px">'+
+  '<button onclick="lgExportCSV(this)" data-type="all" class="btn btn-g" style="padding:10px 18px;font-size:13px">📊 All CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="cod" class="btn" style="padding:10px 18px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c;font-size:13px">📊 COD CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="prepaid" class="btn" style="padding:10px 18px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;font-size:13px">📊 Prepaid CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="advance" class="btn" style="padding:10px 18px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:#818cf8;font-size:13px">📊 Advance CSV</button>'+
+  '</div>'+
+  '<div id="lgExportMsg" style="margin-top:8px;min-height:16px"></div></div>'+
+
+  // ── Orders table ──
+  '<div class="card">'+
+  '<div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
+  '<span>Orders <span class="badge bg" id="lgBadge">0</span></span>'+
+  '<div style="display:flex;gap:8px">'+
+  '<button onclick="lgSelectAll(true)" class="btn btn-s" style="padding:5px 12px;font-size:11px">☑ All</button>'+
+  '<button onclick="lgSelectAll(false)" class="btn btn-s" style="padding:5px 12px;font-size:11px">☐ None</button>'+
+  '<button onclick="lgPrintSelected()" class="btn" style="padding:5px 12px;font-size:11px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171">🖨️ Print Selected</button>'+
+  '</div></div>'+
+  '<div id="lgWrap"><div class="empty-state"><div>Select session and tap Load</div></div></div>'+
+  '</div>';
+
+  lgLoad();
 }
 
-function _doReject(orderId){
-  var reasonEl=document.getElementById('rejReason_'+orderId);
-  var reason=reasonEl?reasonEl.value.trim():'';
-  var box=document.getElementById('rej_'+orderId);
-  if(box)box.remove();
-  _setRowStatus(orderId,'Rejected');
-  showToast('Order rejected','orange');
+var _lgOrders = [];
+
+function selectSession(btn){
+  document.querySelectorAll('.sess-btn').forEach(function(b){
+    b.style.background='var(--surface2)';b.style.border='1px solid var(--border)';b.style.color='var(--text2)';
+  });
+  btn.style.background='linear-gradient(135deg,#ea580c,#f97316)';
+  btn.style.border='none';btn.style.color='white';
+  lgLoad();
+}
+
+function lgLoad(){
+  var el=document.getElementById('lgWrap');
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading...</div>';
+  var status=document.getElementById('lgStatus')?document.getElementById('lgStatus').value:'Label Generated';
   google.script.run
-    .withSuccessHandler(function(r){
-      if(!r||!r.success){
-        _setRowStatus(orderId,'Pending');
-        showToast('Error: '+(r&&r.msg||'Failed'),'red');
-        return;
-      }
-      setTimeout(function(){ _removeRow(orderId); },600);
+    .withSuccessHandler(function(orders){
+      orders=orders||[];
+      var pay=document.getElementById('lgPay')?document.getElementById('lgPay').value:'';
+      var prod=document.getElementById('lgProd')?document.getElementById('lgProd').value:'';
+      if(pay)orders=orders.filter(function(o){return o.paymentType===pay;});
+      if(prod==='Lehya')orders=orders.filter(function(o){return !(o.labelText&&o.labelText.indexOf('AS')===0);});
+      if(prod==='Astra')orders=orders.filter(function(o){return o.labelText&&o.labelText.indexOf('AS')===0;});
+      _lgOrders=orders;
+      // Update summary
+      var cod=orders.filter(function(o){return o.paymentType==='COD';}).length;
+      var pre=orders.filter(function(o){return o.paymentType==='Prepaid';}).length;
+      var adv=orders.filter(function(o){return o.paymentType==='Advance';}).length;
+      var sv=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+      sv('lgCOD',cod);sv('lgPRE',pre);sv('lgADV',adv);sv('lgTOT',orders.length);
+      var b=document.getElementById('lgBadge');if(b)b.textContent=orders.length;
+      // Render table
+      if(!orders.length){if(el)el.innerHTML='<div class="empty-state"><div>No orders found</div></div>';return;}
+      var h='<div class="table-scroll"><table><thead><tr>'+
+        '<th><input type="checkbox" id="lgChkAll" onchange="lgSelectAll(this.checked)" style="width:14px;height:14px"></th>'+
+        '<th>#</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY Number</th><th>Status</th><th>Actions</th>'+
+        '</tr></thead><tbody>';
+      orders.forEach(function(o){
+        var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+        var hasEY=o.eyNumber&&o.eyNumber.length>3;
+        h+='<tr>'+
+          '<td><input type="checkbox" class="lg-chk" value="'+o.orderId+'" style="width:14px;height:14px"></td>'+
+          '<td style="color:#f97316;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
+          '<td style="font-weight:700">'+o.customerName+'</td>'+
+          '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
+          '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
+          '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
+          '<td><span class="badge '+payClr+'">'+o.paymentType+'</span></td>'+
+          '<td style="color:#22d3ee;font-weight:700;font-size:11px" data-field="ey">'+(hasEY?o.eyNumber:'<span style="color:#f59e0b">—</span>')+'</td>'+
+          '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td>'+
+          '<td style="white-space:nowrap">'+
+          (hasEY?
+            '<button class="btn btn-g lga-btn" data-act="print" data-oid3="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-bottom:2px;display:block;width:100%">🖨️ Print</button>'+
+            '<button class="btn btn-s lga-btn" data-act="dispatch" data-oid3="'+o.orderId+'" style="padding:4px 8px;font-size:10px;display:block;width:100%">🚀 Dispatch</button>':
+            '<button class="btn btn-p lga-btn" data-act="ey" data-oid3="'+o.orderId+'" style="padding:4px 8px;font-size:10px;display:block;width:100%">EY+Label</button>'
+          )+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+      if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }
     })
     .withFailureHandler(function(e){
-      _setRowStatus(orderId,'Pending');
-      showToast('Error: '+e.message,'red');
+      if(el)el.innerHTML='<div class="err-msg">Error: '+e.message+'</div>';
     })
-    .rejectOrder(orderId,reason);
+    .getSalesOrders({status:status});
 }
-function assignEYUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){showToast('EY: '+r.eyNumber,'green');_setRowText(orderId,'ey',r.eyNumber);}else{alert('Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
-function markDispatchedUI(orderId){_setRowStatus(orderId,'Dispatched');showToast('🚀 Dispatched!','green');google.script.run.withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Confirmed');showToast('Error','red');}else _removeRow(orderId);}).withFailureHandler(function(e){_setRowStatus(orderId,'Confirmed');showToast('Error: '+e.message,'red');}).markDispatched(orderId);}
-function markOFDUI(orderId){_setRowStatus(orderId,'Out for Delivery');showToast('Out for Delivery ✅','green');google.script.run.withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Dispatched');showToast('Error','red');}}).withFailureHandler(function(e){showToast('Error: '+e.message,'red');}).markOrderOFD(orderId);}
-function markDeliveredUI(orderId){_setRowStatus(orderId,'Delivered');showToast('✅ Delivered!','green');google.script.run.withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Out for Delivery');showToast('Error','red');}else _removeRow(orderId);}).withFailureHandler(function(e){showToast('Error: '+e.message,'red');}).markOrderDelivered(orderId);}
-function deleteSalesOrderUI(orderId){
-  if(!confirm('Delete this order?'))return;
-  _removeRow(orderId);
-  showToast('Order deleted','orange');
-  google.script.run
-    .withSuccessHandler(function(r){if(!r||!r.success)showToast('Delete failed - refresh','red');})
-    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
-    .deleteSalesOrder(orderId);
+
+function lgSelectAll(v){
+  document.querySelectorAll('.lg-chk').forEach(function(c){c.checked=v;});
+  var a=document.getElementById('lgChkAll');if(a)a.checked=v;
 }
-function renderLabelGen(){var pg=document.getElementById('pg-labelGen');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Label Generation</div></div><div id="labelGenList"><div class="loading"><div class="spin-sm"></div></div></div><div id="labelPrintArea"></div>';loadConfirmedOrdersForLabel();}
-function loadConfirmedOrdersForLabel(){var el=document.getElementById('labelGenList');if(!el)return;google.script.run.withSuccessHandler(function(orders){var ready=orders.filter(function(o){return o.status==='Confirmed'||o.status==='Label Generated';});if(!ready.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F3F7;</div><div>No orders ready for labels</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Series</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>EY Number</th><th>Status</th><th>Actions</th></tr></thead><tbody>';ready.forEach(function(o){var actions='';if(o.status==='Confirmed'){actions='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:5px 11px;font-size:11px">Assign EY + Label</button>';}else if(o.status==='Label Generated'){actions='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:5px 11px;font-size:11px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:5px 11px;font-size:11px">Dispatch</button>';}h+='<tr><td style="color:#818cf8;font-weight:700">#'+o.series+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+o.phone+'</td><td>'+o.grams+'gm</td><td style="color:#34d399">'+fnr(o.finalPrice)+'</td><td style="color:#22d3ee;font-weight:700">'+(o.eyNumber||'Not assigned')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({});}
-function assignEYAndLabel(orderId){
-  // Show loading state on button
-  var btn=document.querySelector('[data-oid="'+orderId+'"] ~ * .ey-btn,[data-oid="'+orderId+'"]').closest('tr');
-  showToast('Assigning EY number...','orange');
+
+function lgAssignEY(orderId){
+  var row=document.querySelector('[data-oid="'+orderId+'"]');
+  if(row){var tr=row.closest('tr');if(tr)tr.style.opacity='0.6';}
+  showToast('Assigning EY...','orange');
   google.script.run
     .withSuccessHandler(function(r){
-      if(!r||!r.success){
-        showToast('❌ '+(r&&r.msg?r.msg:'No EY available - add batch first'),'red');
-        return;
-      }
+      if(!r||!r.success){showToast('❌ '+(r&&r.msg||'No EY available'),'red');var tr2=document.querySelector('[data-oid="'+orderId+'"]');if(tr2)tr2.closest('tr').style.opacity='1';return;}
       showToast('✅ EY: '+r.eyNumber,'green');
-      // Update row immediately
       _setRowStatus(orderId,'Label Generated');
       var eyCell=document.querySelector('[data-oid="'+orderId+'"]').closest('tr').querySelector('[data-field="ey"]');
-      if(eyCell)eyCell.textContent=r.eyNumber;
-      // Update actions buttons in row
-      _updateLabelRowActions(orderId,r.eyNumber,'Label Generated');
-      // Show label preview directly (no second API call)
+      if(eyCell)eyCell.innerHTML='<span style="color:#22d3ee;font-weight:700">'+r.eyNumber+'</span>';
+      // Update action buttons in row
+      var tr3=document.querySelector('[data-oid="'+orderId+'"]').closest('tr');
+      if(tr3){
+        var td=tr3.querySelector('td:last-child');
+        if(td)td.innerHTML='<button class="btn btn-g" style="padding:4px 8px;font-size:10px;margin-bottom:2px;display:block;width:100%">🖨️ Print</button>'+
+          '<button class="btn btn-s" style="padding:4px 8px;font-size:10px;display:block;width:100%">🚀 Dispatch</button>';
+        td.querySelectorAll('button')[0].onclick=function(){printLabelUI(orderId);};
+        td.querySelectorAll('button')[1].onclick=function(){markDispatchedUI(orderId);};
+        tr3.style.opacity='1';
+      }
       if(r.labelData)showLabelPreview(r.labelData);
-      else printLabelUI(orderId);
-    })
-    .withFailureHandler(function(e){
-      showToast('Error: '+e.message,'red');
-    })
-    .assignEYToOrder(orderId,S.user.empId);
-}
-function printLabelUI(orderId){
-  showToast('Loading label...','orange');
-  google.script.run
-    .withSuccessHandler(function(d){
-      if(!d){showToast('Label data not found','red');return;}
-      showLabelPreview(d);
     })
     .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
-    .getLabelData(orderId);
+    .assignEYToOrder(orderId,S.user.empId);
 }
-function showLabelPreview(d){
-  var el=document.getElementById('labelPrintArea');if(!el)return;
-  var isCOD=d.paymentType==='COD';
-  var isPrepaid=d.paymentType==='Prepaid'||d.paymentType==='Advance';
 
-  // India Post official logo SVG (horn/bugle design)
-  var ipLogo='<svg width="48" height="48" viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">'+
-    '<rect width="120" height="80" fill="white"/>'+
-    // Horn shape
-    '<path d="M10 50 Q20 20 60 15 Q90 12 105 30 Q115 42 108 55 Q100 65 85 62 Q70 60 65 50 Q55 38 40 42 Q28 46 25 55 Z" fill="#dc2626" stroke="#8B0000" stroke-width="1"/>'+
-    '<path d="M25 55 Q30 45 40 42 Q52 40 60 48 Q55 62 42 65 Q30 66 25 55 Z" fill="#fbbf24"/>'+
-    // Flag lines
-    '<line x1="105" y1="30" x2="115" y2="15" stroke="#dc2626" stroke-width="3"/>'+
-    '<line x1="108" y1="28" x2="118" y2="18" stroke="#dc2626" stroke-width="2"/>'+
-    '<text x="60" y="76" fill="#dc2626" font-size="9" font-weight="900" font-family="Arial" text-anchor="middle">India Post</text>'+
-    '</svg>';
-
-  var lh='<div id="printableLabel" style="background:white;color:black;font-family:Arial,sans-serif;width:680px;border:1.5px solid #000;padding:0;margin:0;font-size:11px">';
-
-  // ═══ COD HEADER (only for COD) ═══
-  if(isCOD){
-    lh+='<div style="border-bottom:1.5px solid #000;padding:7px 14px;text-align:center;font-weight:700;font-size:12px">Cash On Delivery for Rs '+fn(d.codAmount)+' ('+numberToWords(d.codAmount)+' Only)</div>';
-  }
-
-  // ═══ MAIN BODY ═══
-  lh+='<div style="display:flex;min-height:200px">';
-
-  // ─── LEFT COLUMN ───
-  lh+='<div style="width:320px;flex-shrink:0;padding:10px 12px;border-right:1.5px solid #000">';
-
-  // Barcode + India Post logo in same row
-  lh+='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">';
-  lh+='<div style="flex:1"><svg id="labelBarcode" style="width:220px;height:52px"></svg></div>';
-  lh+='<div style="flex-shrink:0;margin-left:8px">'+ipLogo+'</div>';
-  lh+='</div>';
-
-  // EY Number
-  lh+='<div style="font-weight:900;font-size:13px;letter-spacing:1px;margin-bottom:6px">'+d.eyNumber+'</div>';
-
-  // Weight line
-  lh+='<div style="margin-bottom:4px"><b>Weight:</b> '+d.weight+' grams &nbsp;&nbsp; <b>Vol Weight:</b> '+d.volWeight+'grams</div>';
-
-  // Ref
-  lh+='<div style="margin-bottom:8px"><b>Ref:</b> '+d.refNo+'</div>';
-
-  // Divider
-  lh+='<div style="border-top:1px solid #000;margin-bottom:8px"></div>';
-
-  // From
-  lh+='<div style="margin-bottom:4px"><b>From,</b></div>';
-  lh+='<div>'+d.from.name+','+d.from.city+'</div>';
-  lh+='<div>'+d.from.phone+'</div>';
-  lh+='<div>COSTUMER ID:'+d.from.custId+'</div>';
-  lh+='<div>CONTRACT ID:'+d.from.contractId+' PIN:'+d.from.pin+'</div>';
-  lh+='<div style="margin-top:8px">🙏 PLEASE CALL CUSTOMER ON DELIVERY 🙏</div>';
-  lh+='</div>';
-
-  // ─── RIGHT COLUMN ───
-  lh+='<div style="flex:1;padding:10px 12px">';
-
-  if(isCOD){
-    lh+='<div style="text-align:center;font-weight:900;font-size:13px;text-decoration:underline;margin-bottom:10px">CASH ON DELIVERY</div>';
-  }
-
-  // To
-  lh+='<div><b>To,</b></div>';
-  lh+='<div style="font-size:13px;margin-top:4px">'+d.to.name+', '+d.to.series+'</div>';
-  lh+='<div style="margin-top:4px;line-height:1.7;font-size:12px">'+d.to.address+'</div>';
-
-  // Post office (underlined, shown twice like in original)
-  lh+='<div style="margin-top:6px;text-decoration:underline;font-size:12px">'+d.to.postOffice+'</div>';
-
-  // Product + call to action
-  lh+='<div style="margin-top:8px;font-size:12px">'+d.labelText+' 🙏 CALL CUSTOMER ON DELIVERY</div>';
-
-  // PIN bold
-  lh+='<div style="margin-top:8px;font-weight:900;font-size:13px">'+d.to.postOffice.toUpperCase()+' - PIN: '+d.to.pincode+'</div>';
-
-  // Phone
-  lh+='<div style="margin-top:6px;font-size:12px">PH: '+d.to.phone+'</div>';
-
-  lh+='</div>';
-  lh+='</div>'; // end flex
-  lh+='</div>'; // end label
-
-  el.innerHTML='<div class="card" style="margin-top:18px">'+
-    '<div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
-    '🏷️ Label Preview — #'+d.series+
-    '<div style="display:flex;gap:8px">'+
-    '<button onclick="triggerPrint()" class="btn btn-g" style="padding:7px 16px;font-size:12px">🖨️ Print Label</button>'+
-    '</div></div>'+
-    '<div style="overflow-x:auto;padding:8px 0">'+lh+'</div>'+
-    '</div>';
-
-  setTimeout(function(){
-    try{
-      JsBarcode('#labelBarcode',d.eyNumber,{format:'CODE128',width:2,height:48,displayValue:false,margin:0});
-    }catch(e){console.error('Barcode error:',e);}
-  },150);
+function lgExportCSV(el){
+  var type=typeof el==='string'?el:(el&&el.getAttribute?el.getAttribute('data-type'):'all');
+  var orders=_lgOrders.slice();
+  if(type==='cod')orders=orders.filter(function(o){return o.paymentType==='COD';});
+  else if(type==='prepaid')orders=orders.filter(function(o){return o.paymentType==='Prepaid';});
+  else if(type==='advance')orders=orders.filter(function(o){return o.paymentType==='Advance';});
+  if(!orders.length){showToast('No '+type+' orders to export','orange');return;}
+  var PR={50:{l:14,b:9,h:7,w:114},100:{l:14,b:9,h:7,w:192},150:{l:14,b:12,h:9,w:198},200:{l:14,b:12,h:9,w:310},250:{l:14,b:12,h:9,w:398},300:{l:14,b:12,h:9,w:466},350:{l:14,b:12,h:9,w:488},400:{l:14,b:12,h:9,w:498},450:{l:14,b:12,h:9,w:540},500:{l:14,b:12,h:9,w:810},550:{l:14,b:12,h:9,w:990},600:{l:14,b:12,h:9,w:990},650:{l:14,b:12,h:9,w:990},700:{l:14,b:12,h:9,w:990},750:{l:14,b:12,h:9,w:990},800:{l:14,b:12,h:9,w:990},850:{l:14,b:12,h:9,w:990},900:{l:14,b:12,h:9,w:990},1000:{l:14,b:12,h:9,w:990}};
+  var rows=[['ArticleNumber','ReceiverName','ReceiverAddress','ReceiverPincode','ReceiverMobile','ReceiverCity','CODAmount','Weight','Length','Breadth','Height','ProductType','ReferenceNumber']];
+  orders.forEach(function(o){
+    var g=parseInt(o.grams)||0;
+    var p=PR[g]||{l:14,b:12,h:9,w:500};
+    var cod=o.paymentType==='COD'?o.finalPrice:0;
+    rows.push([
+      o.eyNumber||'',
+      '"'+String(o.customerName||'').replace(/"/g,"'")+'"',
+      '"'+String(o.address||'').replace(/"/g,"'")+'"',
+      o.pincode||'',
+      o.phone||'',
+      '"'+(o.postOffice||'')+'"',
+      cod,p.w,p.l,p.b,p.h,
+      o.paymentType==='COD'?'COD':'Speed Post',
+      'MV'+o.series
+    ]);
+  });
+  var csv=rows.map(function(r){return r.join(',');}).join('\n');
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  var now=new Date();
+  a.download='Vesino_'+type.toUpperCase()+'_'+todayStr()+'_'+now.getHours()+'h.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('✅ Exported '+orders.length+' orders!','green');
+  var msg=document.getElementById('lgExportMsg');
+  if(msg)msg.innerHTML='<div class="ok-msg">✅ '+orders.length+' '+type.toUpperCase()+' orders exported — check Downloads folder</div>';
 }
-function triggerPrint(){window.print();}
+
+function lgPrintSelected(){
+  var ids=Array.from(document.querySelectorAll('.lg-chk:checked')).map(function(c){return c.value;});
+  if(!ids.length){showToast('Select orders first','orange');return;}
+  showToast('Printing '+ids.length+' labels...','green');
+  _lgPrintSeq(ids,0);
+}
+
+function _lgPrintSeq(ids,i){
+  if(i>=ids.length)return;
+  google.script.run
+    .withSuccessHandler(function(d){
+      if(d){showLabelPreview(d);setTimeout(function(){triggerPrint();setTimeout(function(){_lgPrintSeq(ids,i+1);},2000);},600);}
+      else{_lgPrintSeq(ids,i+1);}
+    })
+    .getLabelData(ids[i]);
+}
+
 function renderEYManage(){var pg=document.getElementById('pg-eyManage');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">EY Number Management</div></div><div class="g2"><div class="card"><div class="card-title">Add EY Batch</div><div class="fcol"><label class="label">EY Numbers (one per line)</label><textarea class="textarea" id="eyBatchInput" rows="8" placeholder="EY067787332IN"></textarea></div><button class="btn btn-p btn-full" onclick="addEYBatchUI()" style="padding:12px">Add Batch</button><div id="eyBatchStatus"></div></div><div class="card"><div class="card-title">EY Stock</div><div id="eyStatsWrap"><div class="loading"><div class="spin-sm"></div></div></div></div></div>';loadEYStats();}
 function addEYBatchUI(){var raw=document.getElementById('eyBatchInput').value.trim();var st=document.getElementById('eyBatchStatus');if(!raw){if(st)st.innerHTML='<div class="err-msg">Enter EY numbers</div>';return;}var list=raw.split('\n').map(function(s){return s.trim().toUpperCase();}).filter(Boolean);if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Adding...</div>';google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Added '+r.added+'!</div>';document.getElementById('eyBatchInput').value='';loadEYStats();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).addEYBatch(list,S.user.empId);}
 function loadEYStats(){var el=document.getElementById('eyStatsWrap');if(!el)return;google.script.run.withSuccessHandler(function(stats){el.innerHTML='<div class="g3" style="margin-bottom:0"><div style="text-align:center;padding:18px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:var(--r)"><div style="font-size:28px;font-weight:800;color:#34d399">'+fn(stats.available)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Available</div></div><div style="text-align:center;padding:18px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r)"><div style="font-size:28px;font-weight:800;color:#818cf8">'+fn(stats.used)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Used</div></div><div style="text-align:center;padding:18px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--r)"><div style="font-size:28px;font-weight:800;">'+fn(stats.total)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Total</div></div></div>'+(stats.available<10?'<div class="err-msg" style="margin-top:14px">Low EY stock! Add new batch.</div>':'');}).getEYStats();}
@@ -1539,12 +1433,22 @@ function renderOFDDash(){var pg=document.getElementById('pg-ofdDash');if(!pg)ret
 function loadOFDSummary(){var el=document.getElementById('ofdSummaryWrap');if(!el)return;google.script.run.withSuccessHandler(function(s){var h='<div class="stat-grid"><div class="sc" style="--sc-col:#f87171"><div class="sl">OFD Today</div><div class="sv">'+s.totalOFD+'</div></div><div class="sc" style="--sc-col:#34d399"><div class="sl">Called</div><div class="sv">'+s.called+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Not Called</div><div class="sv" style="color:#f87171">'+s.notCalled+'</div></div><div class="sc" style="--sc-col:#34d399"><div class="sl">Will Receive</div><div class="sv">'+s.willReceive+'</div></div><div class="sc" style="--sc-col:#fcd34d"><div class="sl">Not Available</div><div class="sv">'+s.notAvailable+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Wants Cancel</div><div class="sv" style="color:#f87171">'+s.wantsCancel+'</div></div></div>';if(s.orders&&s.orders.length){h+='<div class="table-wrap"><div class="table-hdr"><div class="table-title">OFD Orders</div></div><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Phone</th><th>COD</th><th>Employee</th><th>Called</th><th>Response</th><th>Action</th></tr></thead><tbody>';s.orders.forEach(function(o){var calledBadge=o.called==='Yes'?'<span class="badge bg">Called</span>':'<span class="badge br">Not Called</span>';var respBadge=o.response?'<span class="badge by">'+o.response+'</span>':'-';var action=o.called!=='Yes'?'<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Re-OFD</button>':'';h+='<tr><td style="font-weight:700">'+o.customerName+'</td><td>'+o.phone+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.amount)+'</td><td>'+o.empName+'</td><td>'+calledBadge+'</td><td>'+respBadge+'</td><td>'+action+'</td></tr>';});h+='</tbody></table></div></div>';}else{h+='<div class="empty-state"><div class="empty-icon">&#x1F69A;</div><div>No OFD orders today</div></div>';}el.innerHTML=h;}).getOFDSummary();}
 function renderOrders(){var pg=document.getElementById('pg-orders');if(!pg)return;if(!S.user.isAdmin){renderSubmitForm(pg);return;}pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Daily Orders</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="ordDateF" onchange="filterOrders()"></select><span class="fl">Brand:</span><select class="fsel" id="ordBrandF" onchange="filterOrders()"><option value="">All</option><option>Manveera</option><option>Dhaara Wellness</option></select><button class="btn btn-s" onclick="document.getElementById(\'ordDateF\').value=\'\';document.getElementById(\'ordBrandF\').value=\'\';filterOrders()">Reset</button></div><div id="ordKpis"></div><div id="ordTable"><div class="loading"><div class="spin-sm"></div></div></div>';populateFilters();filterOrders();}
 function filterOrders(){var dateF=document.getElementById('ordDateF')?document.getElementById('ordDateF').value:'';var brandF=document.getElementById('ordBrandF')?document.getElementById('ordBrandF').value:'';var all=(S.data.entries||[]).filter(function(r){return r.role==='Sales';});var filtered=dateF?all.filter(function(r){return r.date===dateF;}):all;if(brandF)filtered=filtered.filter(function(r){return r.brand===brandF;});var t={ord:0,lehya:0,astra:0,dhaara:0};filtered.forEach(function(r){t.ord+=r.totalOrders;t.lehya+=r.totalLehya;t.astra+=r.totalAstra;t.dhaara+=r.totalDhaara;});var kpi=document.getElementById('ordKpis');if(kpi)kpi.innerHTML='<div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total</div><div class="sv">'+fn(t.ord)+'</div></div><div class="sc" style="--sc-col:#a78bfa"><div class="sl">Lehya</div><div class="sv">'+fn(t.lehya)+'</div></div><div class="sc" style="--sc-col:#60a5fa"><div class="sl">Astra</div><div class="sv">'+fn(t.astra)+'</div></div><div class="sc" style="--sc-col:#34d399"><div class="sl">Dhaara</div><div class="sv">'+fn(t.dhaara)+'</div></div></div>';var sorted=filtered.sort(function(a,b){return b.totalOrders-a.totalOrders;});var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>#</th><th>Employee</th><th>Brand</th><th>Lehya</th><th>Astra</th><th>Dhaara</th><th>Total</th><th>Att</th></tr></thead><tbody>';sorted.forEach(function(e,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+e.empName+'</td><td><span class="badge '+(e.brand==='Manveera'?'bi':'bg')+'">'+e.brand+'</span></td><td style="color:#a78bfa">'+e.totalLehya+'</td><td style="color:#60a5fa">'+e.astraBottles+'</td><td style="color:#34d399">'+e.totalDhaara+'</td><td style="font-weight:800">'+e.totalOrders+'</td><td><span style="color:'+attColor(e.att)+'">'+attLabel(e.att)+'</span></td></tr>';});if(!sorted.length)h+='<tr><td colspan="8"><div class="empty-state"><div>No orders</div></div></td></tr>';h+='</tbody></table></div></div>';var tbl=document.getElementById('ordTable');if(tbl)tbl.innerHTML=h;}
-function renderSubmitForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Daily Entry</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="feDate" value="'+todayStr()+'" readonly></div><div class="fcol"><label class="label">Attendance</label><select class="select" id="feAtt"><option value="Present">Present</option><option value="Half Day">Half Day</option><option value="Absent">Absent</option></select></div></div><div style="padding:14px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:10px">Golden Lehya</div><div class="frow"><div class="fcol"><label class="label">50g</label><input type="number" class="input" id="feGL50" placeholder="0" min="0"></div><div class="fcol"><label class="label">100g</label><input type="number" class="input" id="feGL100" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">200g</label><input type="number" class="input" id="feGL200" placeholder="0" min="0"></div><div class="fcol"><label class="label">500g</label><input type="number" class="input" id="feGL500" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feLehhaCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feLehhaPre" placeholder="0" min="0"></div></div></div><div style="padding:14px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:10px">Astra</div><div class="fcol"><label class="label">Bottles</label><input type="number" class="input" id="feAstraBottles" placeholder="0" min="0"></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feAstraCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feAstraPre" placeholder="0" min="0"></div></div></div><div class="fcol"><label class="label">Notes</label><textarea class="textarea" id="feNotes" rows="2"></textarea></div><button class="btn btn-p btn-full" onclick="submitEntryForm()" id="feSubmitBtn" style="padding:13px">Submit</button><div id="feStatus"></div></div>';}
-function submitEntryForm(){var g=function(id){var el=document.getElementById(id);return el?el.value:0;};var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,role:S.user.role,brand:S.user.brand,attendance:g('feAtt'),gl50:Number(g('feGL50'))||0,gl100:Number(g('feGL100'))||0,gl200:Number(g('feGL200'))||0,gl500:Number(g('feGL500'))||0,astraBottles:Number(g('feAstraBottles'))||0,lehhaCod:Number(g('feLehhaCod'))||0,lehhaPre:Number(g('feLehhaPre'))||0,astraCod:Number(g('feAstraCod'))||0,astraPre:Number(g('feAstraPre'))||0,notes:g('feNotes')};var btn=document.getElementById('feSubmitBtn');if(btn){btn.disabled=true;btn.textContent='Submitting...';}google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit';}var st=document.getElementById('feStatus');if(r.success){if(st)st.innerHTML='<div class="ok-msg">Submitted!</div>';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent='Submit';}var st=document.getElementById('feStatus');if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';}).submitEntry(data);}
+function renderSubmitForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Daily Entry</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="feDate" value="'+todayStr()+'" readonly></div><div class="fcol"><label class="label">Attendance</label><select class="select" id="feAtt"><option value="Present">Present</option><option value="Half Day">Half Day</option><option value="Absent">Absent</option></select></div></div><div style="padding:14px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:10px">Golden Lehya</div><div class="frow"><div class="fcol"><label class="label">50g</label><input type="number" class="input" id="feGL50" placeholder="0" min="0"></div><div class="fcol"><label class="label">100g</label><input type="number" class="input" id="feGL100" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">200g</label><input type="number" class="input" id="feGL200" placeholder="0" min="0"></div><div class="fcol"><label class="label">500g</label><input type="number" class="input" id="feGL500" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feLehhaCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feLehhaPre" placeholder="0" min="0"></div></div></div><div style="padding:14px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:10px">Astra</div><div class="fcol"><label class="label">Bottles</label><input type="number" class="input" id="feAstraBottles" placeholder="0" min="0"></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feAstraCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feAstraPre" placeholder="0" min="0"></div></div></div><div style="padding:14px;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#34d399;margin-bottom:10px">Dhaara Wellness</div><div class="frow"><div class="fcol"><label class="label">Shampoo</label><input type="number" class="input" id="feShampoo" placeholder="0" min="0"></div><div class="fcol"><label class="label">Hair Oil</label><input type="number" class="input" id="feHairOil" placeholder="0" min="0"></div></div><div class="fcol"><label class="label">Facewash</label><input type="number" class="input" id="feFacewash" placeholder="0" min="0"></div></div><div class="fcol"><label class="label">Notes</label><textarea class="textarea" id="feNotes" rows="2"></textarea></div><button class="btn btn-p btn-full" onclick="submitEntryForm()" id="feSubmitBtn" style="padding:13px">Submit</button><div id="feStatus"></div></div>';}
+function submitEntryForm(){var g=function(id){var el=document.getElementById(id);return el?el.value:0;};var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,role:S.user.role,brand:S.user.brand,attendance:g('feAtt'),gl50:Number(g('feGL50'))||0,gl100:Number(g('feGL100'))||0,gl200:Number(g('feGL200'))||0,gl500:Number(g('feGL500'))||0,astraBottles:Number(g('feAstraBottles'))||0,lehhaCod:Number(g('feLehhaCod'))||0,lehhaPre:Number(g('feLehhaPre'))||0,astraCod:Number(g('feAstraCod'))||0,astraPre:Number(g('feAstraPre'))||0,shampoo:Number(g('feShampoo'))||0,hairOil:Number(g('feHairOil'))||0,facewash:Number(g('feFacewash'))||0,notes:g('feNotes')};var btn=document.getElementById('feSubmitBtn');if(btn){btn.disabled=true;btn.textContent='Submitting...';}google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit';}var st=document.getElementById('feStatus');if(r.success){if(st)st.innerHTML='<div class="ok-msg">Submitted!</div>';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent='Submit';}var st=document.getElementById('feStatus');if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';}).submitEntry(data);}
 function renderEnquiries(){var pg=document.getElementById('pg-enquiries');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Enquiries Log</div></div><div class="g2"><div class="card"><div class="card-title">Log Enquiry</div><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="enqDate" value="'+todayStr()+'"></div><div class="fcol"><label class="label">Employee ID</label><input type="text" class="input" id="enqEmpId"></div></div><div class="frow"><div class="fcol"><label class="label">Brand</label><select class="select" id="enqBrand"><option>Manveera</option><option>Dhaara Wellness</option></select></div><div class="fcol"><label class="label">Count</label><input type="number" class="input" id="enqCount" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">Source</label><select class="select" id="enqSource"><option>Direct</option><option>WhatsApp</option><option>Facebook</option><option>Instagram</option><option>Referral</option><option>Other</option></select></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="enqNotes"></div></div><button class="btn btn-p btn-full" onclick="submitEnqLogUI()" style="padding:12px">Log</button><div id="enqStatus"></div></div><div class="card"><div class="card-title">Today Summary</div><div id="enqSummary"></div></div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="enqDateF" onchange="loadEnqTable()"></select><span class="fl">Month:</span><select class="fsel" id="enqMonF" onchange="loadEnqTable()"></select></div><div id="enqTable"></div>';populateFilters();loadEnqSummary();loadEnqTable();}
 function loadEnqSummary(){var el=document.getElementById('enqSummary');var enqLog=S.data?S.data.enqLog||[]:[]; var td=todayStr();var total=enqLog.reduce(function(s,r){return s+r.enqCount;},0);var todayEnq=enqLog.filter(function(r){return r.date===td;}).reduce(function(s,r){return s+r.enqCount;},0);if(el)el.innerHTML='<div class="g2"><div style="text-align:center;padding:14px;background:rgba(99,102,241,.1);border-radius:var(--r)"><div style="font-size:26px;font-weight:800;color:#818cf8">'+fn(total)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Total</div></div><div style="text-align:center;padding:14px;background:rgba(16,185,129,.1);border-radius:var(--r)"><div style="font-size:26px;font-weight:800;color:#34d399">'+fn(todayEnq)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Today</div></div></div>';}
 function submitEnqLogUI(){var empId=document.getElementById('enqEmpId').value.trim().toUpperCase();var count=Number(document.getElementById('enqCount').value)||0;var st=document.getElementById('enqStatus');if(!empId||!count){if(st)st.innerHTML='<div class="err-msg">ID and count required</div>';return;}var empMap=S.data?S.data.empMap||{}:{};var emp=empMap[empId]||{};google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Logged!</div>';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).submitEnquiryLog({date:document.getElementById('enqDate').value,empId:empId,empName:emp.name||empId,brand:document.getElementById('enqBrand').value,enqCount:count,source:document.getElementById('enqSource').value,notes:document.getElementById('enqNotes').value.trim()});}
-function loadEnqTable(){var dateF=document.getElementById('enqDateF')?document.getElementById('enqDateF').value:'';var monF=document.getElementById('enqMonF')?document.getElementById('enqMonF').value:'';var el=document.getElementById('enqTable');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Brand</th><th>Count</th><th>Source</th></tr></thead><tbody>';rows.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td><span class="badge '+(r.brand==='Manveera'?'bi':'bg')+'">'+r.brand+'</span></td><td style="font-weight:800;color:#818cf8">'+r.enqCount+'</td><td>'+r.source+'</td></tr>';});h+='</tbody></table></div></div>';if(el)el.innerHTML=h;}).getEnquiriesLog({date:dateF,month:monF});}
+function loadEnqTable(){var dateF=document.getElementById('enqDateF')?document.getElementById('enqDateF').value:'';var monF=document.getElementById('enqMonF')?document.getElementById('enqMonF').value:'';var el=document.getElementById('enqTable');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Brand</th><th>Count</th><th>Source</th></tr></thead><tbody>';rows.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td><span class="badge '+(r.brand==='Manveera'?'bi':'bg')+'">'+r.brand+'</span></td><td style="font-weight:800;color:#818cf8">'+r.enqCount+'</td><td>'+r.source+'</td></tr>';});h+='</tbody></table></div></div>';if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }}).getEnquiriesLog({date:dateF,month:monF});}
 function renderPerformance(){var pg=document.getElementById('pg-performance');if(!pg||!S.data)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Performance Analytics</div></div><div class="fbar"><span class="fl">Month:</span><select class="fsel" id="perfMonF" onchange="filterPerf()"></select><select class="fsel" id="perfEmpF" onchange="filterPerf()"><option value="">All employees</option></select><select class="fsel" id="perfBrandF" onchange="filterPerf()"><option value="">All brands</option><option>Manveera</option><option>Dhaara Wellness</option></select><button class="btn btn-s" onclick="resetPerfF()">Reset</button></div><div id="perfIndWrap" style="display:none;margin-bottom:18px"></div><div id="perfWrap"><div class="loading"><div class="spin-sm"></div></div></div>';populateFilters();var pmf=document.getElementById('perfMonF');if(pmf&&!pmf.value)pmf.value=getMonthStr();filterPerf();}
 function filterPerf(){var monF=document.getElementById('perfMonF')?document.getElementById('perfMonF').value:'';var empF=document.getElementById('perfEmpF')?document.getElementById('perfEmpF').value:'';var brandF=document.getElementById('perfBrandF')?document.getElementById('perfBrandF').value:'';var iw=document.getElementById('perfIndWrap');if(empF&&monF){if(iw)iw.style.display='block';loadIndPerf(empF,monF);}else{if(iw)iw.style.display='none';}var entries=(S.data.entries||[]).filter(function(r){return r.role==='Sales';});if(monF)entries=entries.filter(function(r){return getMo(r.date)===monF;});if(empF)entries=entries.filter(function(r){return r.empId===empF;});if(brandF)entries=entries.filter(function(r){return r.brand===brandF;});var retMap=S.data.retMap||{};var enqLog=S.data.enqLog||[];var filtEnq=enqLog;if(monF)filtEnq=filtEnq.filter(function(r){return getMo(r.date)===monF;});if(empF)filtEnq=filtEnq.filter(function(r){return r.empId===empF;});var enqByEmp={};filtEnq.forEach(function(r){enqByEmp[r.empId]=(enqByEmp[r.empId]||0)+r.enqCount;});var em={};entries.forEach(function(r){if(!em[r.empId])em[r.empId]={name:r.empName,id:r.empId,brand:r.brand,ord:0,lehya:0,astra:0,dhaara:0,fD:0,hD:0,aD:0};var e=em[r.empId];e.ord+=r.totalOrders;e.lehya+=r.totalLehya;e.astra+=r.astraBottles;e.dhaara+=r.totalDhaara;if(r.att===1)e.fD++;else if(r.att===0.5)e.hD++;else e.aD++;});Object.keys(em).forEach(function(id){em[id].enq=enqByEmp[id]||0;});var sorted=Object.values(em).sort(function(a,b){return b.ord-a.ord;});var totOrd=sorted.reduce(function(s,e){return s+e.ord;},0);var totEnq=sorted.reduce(function(s,e){return s+e.enq;},0);var avgConv=totEnq>0?(totOrd/totEnq*100).toFixed(1):0;var pw=document.getElementById('perfWrap');if(!pw)return;if(!sorted.length){pw.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F4CA;</div><div>Select a month</div></div>';return;}var h='<div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total Orders</div><div class="sv">'+fn(totOrd)+'</div></div><div class="sc" style="--sc-col:'+convColor(avgConv)+'"><div class="sl">Avg Conv%</div><div class="sv" style="color:'+convColor(avgConv)+'">'+avgConv+'%</div></div><div class="sc" style="--sc-col:#10b981"><div class="sl">Employees</div><div class="sv">'+sorted.length+'</div></div></div>';h+='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Rank</th><th>Employee</th><th>Orders</th><th>Enq</th><th>Conv%</th><th>Returns</th><th>Net Conv%</th><th>View</th></tr></thead><tbody>';sorted.forEach(function(e,i){var conv=e.enq>0?(e.ord/e.enq*100).toFixed(1):0;var ret=retMap[e.id]||0;var netConv=e.enq>0?((e.ord-ret)/e.enq*100).toFixed(1):0;h+='<tr><td style="font-weight:800;color:'+(i===0?'#fcd34d':i===1?'#aaa':i===2?'#d97706':'var(--text3)')+'">'+(i===0?'1st':i===1?'2nd':i===2?'3rd':(i+1))+'</td><td style="font-weight:700">'+e.name+'</td><td style="font-weight:800">'+e.ord+'</td><td>'+e.enq+'</td><td><span class="badge '+convBadge(conv)+'">'+conv+'%</span></td><td style="color:#f87171">'+ret+'</td><td><span class="badge '+convBadge(netConv)+'">'+netConv+'%</span></td><td><button onclick="quickView(\''+e.id+'\')" class="btn btn-s" style="padding:4px 10px;font-size:11px">View</button></td></tr>';});h+='</tbody></table></div></div>';pw.innerHTML=h;}
 function quickView(empId){var monF=document.getElementById('perfMonF');var m=monF&&monF.value?monF.value:getMonthStr();var ef=document.getElementById('perfEmpF');if(ef)ef.value=empId;loadIndPerf(empId,m);var iw=document.getElementById('perfIndWrap');if(iw){iw.style.display='block';iw.scrollIntoView({behavior:'smooth'});}}
@@ -1553,7 +1457,7 @@ function resetPerfF(){['perfMonF','perfEmpF','perfBrandF'].forEach(function(id){
 function renderReturns(){var pg=document.getElementById('pg-returns');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Returns</div></div><div class="g2"><div class="card"><div class="card-title">Log Return</div><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="retDate" value="'+todayStr()+'"></div><div class="fcol"><label class="label">Emp ID</label><input type="text" class="input" id="retEmpId"></div></div><div class="frow"><div class="fcol"><label class="label">Brand</label><select class="select" id="retBrand"><option>Manveera</option><option>Dhaara Wellness</option></select></div><div class="fcol"><label class="label">Product</label><input type="text" class="input" id="retProduct"></div></div><div class="frow"><div class="fcol"><label class="label">Qty</label><input type="number" class="input" id="retQty" min="1"></div><div class="fcol"><label class="label">Reason</label><input type="text" class="input" id="retReason"></div></div><button class="btn btn-d btn-full" onclick="submitReturnUI()" style="padding:12px">Log Return</button><div id="retStatus"></div></div><div class="card"><div class="card-title">Overview</div>'+(function(){var rm=S.data?S.data.retMap||{}:{};var empMap=S.data?S.data.empMap||{}:{};var items=Object.entries(rm).sort(function(a,b){return b[1]-a[1];}).slice(0,8);return items.length?items.map(function(e){var emp=empMap[e[0]]||{};return'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>'+(emp.name||e[0])+'</span><span style="font-weight:800;color:#f87171">'+e[1]+'</span></div>';}).join(''):'<div class="empty-state"><div>No returns</div></div>';})()+'</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="retDateF" onchange="loadRetTable()"></select><span class="fl">Month:</span><select class="fsel" id="retMonF" onchange="loadRetTable()"></select></div><div id="retTable"></div>';populateFilters();loadRetTable();}
 function submitReturnUI(){var d={date:document.getElementById('retDate').value,empId:document.getElementById('retEmpId').value.trim().toUpperCase(),empName:'',brand:document.getElementById('retBrand').value,product:document.getElementById('retProduct').value.trim(),quantity:Number(document.getElementById('retQty').value)||0,reason:document.getElementById('retReason').value.trim(),enteredBy:S.user.empId};var empMap=S.data?S.data.empMap||{}:{};if(empMap[d.empId])d.empName=empMap[d.empId].name;if(!d.empId||!d.quantity||!d.product){document.getElementById('retStatus').innerHTML='<div class="err-msg">Fill all fields</div>';return;}google.script.run.withSuccessHandler(function(r){var st=document.getElementById('retStatus');if(r.success){if(st)st.innerHTML='<div class="ok-msg">Logged!</div>';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).addReturn(d);}
 function loadRetTable(){var dateF=document.getElementById('retDateF')?document.getElementById('retDateF').value:'';var monF=document.getElementById('retMonF')?document.getElementById('retMonF').value:'';var el=document.getElementById('retTable');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){el.innerHTML='<div class="empty-state"><div>No returns</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Product</th><th>Qty</th><th>Reason</th>'+(S.user.isAdmin?'<th>Del</th>':'')+'</tr></thead><tbody>';rows.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td>'+r.product+'</td><td style="color:#f87171;font-weight:800">'+r.quantity+'</td><td>'+r.reason+'</td>'+(S.user.isAdmin?'<td><button onclick="deleteReturnUI(\''+r.date+'\',\''+r.empId+'\',\''+r.product+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Del</button></td>':'')+'</tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getReturns({date:dateF,month:monF});}
-function deleteReturnUI(date,empId,product){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success){showToast('✅ Entry submitted!','green');loadRetTable();}}).deleteReturn(date,empId,product);}
+function deleteReturnUI(date,empId,product){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success){refreshData();loadRetTable();}}).deleteReturn(date,empId,product);}
 function renderAttendance(){var pg=document.getElementById('pg-attendance');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Attendance</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="attDateF" onchange="filterAtt()"></select><span class="fl">Month:</span><select class="fsel" id="attMonF" onchange="filterAtt()"></select><span class="fl">Employee:</span><select class="fsel" id="attEmpF" onchange="filterAtt()"><option value="">All</option></select><button class="btn btn-s" onclick="resetAttF()">Reset</button></div><div id="attWrap"><div class="loading"><div class="spin-sm"></div></div></div>';populateFilters();var td=document.getElementById('attDateF');if(td)td.value=todayStr();filterAtt();}
 function filterAtt(){var dateF=document.getElementById('attDateF')?document.getElementById('attDateF').value:'';var monF=document.getElementById('attMonF')?document.getElementById('attMonF').value:'';var empF=document.getElementById('attEmpF')?document.getElementById('attEmpF').value:'';var aw=document.getElementById('attWrap');if(!aw)return;aw.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(records){if(!records.length){aw.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var fD=records.filter(function(r){return r.att===1;}).length,hD=records.filter(function(r){return r.att===0.5;}).length,aD=records.filter(function(r){return r.att===0;}).length;var h='<div class="att-grid"><div class="att-block att-p"><div class="att-num">'+fD+'</div><div class="att-lbl">Full</div></div><div class="att-block att-h"><div class="att-num">'+hD+'</div><div class="att-lbl">Half</div></div><div class="att-block att-a"><div class="att-num">'+aD+'</div><div class="att-lbl">Absent</div></div><div class="att-block att-t"><div class="att-num">'+records.length+'</div><div class="att-lbl">Records</div></div></div>';h+='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Status</th></tr></thead><tbody>';records.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td><span style="color:'+attColor(r.att)+'">'+r.status+'</span></td></tr>';});h+='</tbody></table></div></div>';aw.innerHTML=h;}).withFailureHandler(function(e){aw.innerHTML='<div class="err-msg">'+e.message+'</div>';}).getAttendanceRecords({date:dateF,month:monF,empId:empF});}
 function resetAttF(){['attDateF','attMonF','attEmpF'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});filterAtt();}
@@ -1680,7 +1584,17 @@ function loadAdminLeaves(){
           '</div></td></tr>';
       });
       h+='</tbody></table></div>';
-      if(el)el.innerHTML=h;
+      if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }
     })
     .withFailureHandler(function(e){
       clearTimeout(timer);
@@ -1699,12 +1613,42 @@ function handleLeave(reqId,action){
 }
 function deleteLeaveUI(reqId){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success)loadAdminLeaves();}).deleteLeave(reqId);}
 function renderSalary(){var pg=document.getElementById('pg-salary');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Salary</div></div><div class="g2"><div class="card"><div class="card-title">Individual Slip</div><div class="fcol"><label class="label">Employee</label><select class="select" id="salEmpF"></select></div><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="salMonF"></div><button class="btn btn-p btn-full" onclick="calcOneSal()" style="padding:12px;margin-top:6px">Calculate</button><div id="salResult"></div></div><div class="card"><div class="card-title">Payroll</div><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="adminSalMon"></div><button class="btn btn-p btn-full" onclick="loadAllSal()" style="padding:12px;margin-top:6px">Generate</button><div id="allSalResult"></div></div></div>';populateFilters();}
-function calcOneSal(){var empId=document.getElementById('salEmpF')?document.getElementById('salEmpF').value:'';var month=document.getElementById('salMonF')?document.getElementById('salMonF').value:'';if(!empId||!month){var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="err-msg">Select employee and month</div>';return;}var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation '+fnr(r.basic)+'</span>':'<span class="perm-badge">Permanent '+fnr(r.basic)+'</span>';var h='<div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:var(--r2);padding:16px;margin-top:12px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="sal-row"><span>Work Days ('+r.fullDays+'f+'+r.halfDays+'h)</span><span style="color:#818cf8">'+r.workDays+'d</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(99,102,241,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-weight:800;color:#34d399;font-size:16px">'+fnr(r.grossWithTea)+'</span></div></div>';if(el)el.innerHTML=h;}).calcSalary(empId,month,true);}
-function loadAllSal(){var month=document.getElementById('adminSalMon')?document.getElementById('adminSalMon').value:'';if(!month){var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="err-msg">Select month</div>';return;}var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No data</div></div>';return;}var total=rows.reduce(function(s,r){return s+r.gross;},0);var h='<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:12px;margin-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">'+rows.length+' employees</span><span style="font-size:18px;font-weight:800;color:#34d399">'+fnr(total)+'</span></div><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>#</th><th>Employee</th><th>Status</th><th>Orders</th><th>Days</th><th>Gross</th></tr></thead><tbody>';rows.forEach(function(r,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+r.name+'</td><td>'+(r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>')+'</td><td>'+fn(r.totalOrders)+'</td><td>'+r.workDays+'d</td><td style="font-weight:800;color:#34d399">'+fnr(r.gross)+'</td></tr>';});h+='</tbody></table></div>';if(el)el.innerHTML=h;}).getAllSalaries(month);}
+function calcOneSal(){var empId=document.getElementById('salEmpF')?document.getElementById('salEmpF').value:'';var month=document.getElementById('salMonF')?document.getElementById('salMonF').value:'';if(!empId||!month){var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="err-msg">Select employee and month</div>';return;}var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation '+fnr(r.basic)+'</span>':'<span class="perm-badge">Permanent '+fnr(r.basic)+'</span>';var h='<div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:var(--r2);padding:16px;margin-top:12px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="sal-row"><span>Work Days ('+r.fullDays+'f+'+r.halfDays+'h)</span><span style="color:#818cf8">'+r.workDays+'d</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(99,102,241,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-weight:800;color:#34d399;font-size:16px">'+fnr(r.grossWithTea)+'</span></div></div>';if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }}).calcSalary(empId,month,true);}
+function loadAllSal(){var month=document.getElementById('adminSalMon')?document.getElementById('adminSalMon').value:'';if(!month){var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="err-msg">Select month</div>';return;}var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No data</div></div>';return;}var total=rows.reduce(function(s,r){return s+r.gross;},0);var h='<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:12px;margin-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">'+rows.length+' employees</span><span style="font-size:18px;font-weight:800;color:#34d399">'+fnr(total)+'</span></div><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>#</th><th>Employee</th><th>Status</th><th>Orders</th><th>Days</th><th>Gross</th></tr></thead><tbody>';rows.forEach(function(r,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+r.name+'</td><td>'+(r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>')+'</td><td>'+fn(r.totalOrders)+'</td><td>'+r.workDays+'d</td><td style="font-weight:800;color:#34d399">'+fnr(r.gross)+'</td></tr>';});h+='</tbody></table></div>';if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }}).getAllSalaries(month);}
 function renderCustomers(){var pg=document.getElementById('pg-customers');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Customers</div></div>'+(S.user.isAdmin?'<div class="card"><div class="card-title">Import from Sheet</div><div style="display:flex;gap:8px;flex-wrap:wrap"><select class="select" id="importSheetSel" style="min-width:200px"><option value="">-- Select --</option></select><button class="btn btn-s" onclick="loadSheetList()">Refresh</button><input type="text" class="input" id="importSheetManual" placeholder="Or type name" style="max-width:200px"><button class="btn btn-p" onclick="runBulkImport()">Import</button></div><div id="importStatus"></div></div>':'')+' <div class="fbar"><input type="text" class="fsel" id="custSearch" placeholder="Search..." style="min-width:240px" oninput="loadCustTable()"></div><div id="custTableWrap"><div class="loading"><div class="spin-sm"></div></div></div>';if(S.user.isAdmin)loadSheetList();loadCustTable();}
 function loadSheetList(){google.script.run.withSuccessHandler(function(sheets){var el=document.getElementById('importSheetSel');if(!el)return;el.innerHTML='<option value="">-- Select --</option>'+sheets.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');}).getAvailableSheets();}
 function runBulkImport(){var sel=document.getElementById('importSheetSel').value;var manual=document.getElementById('importSheetManual').value.trim();var sheetName=manual||sel;var st=document.getElementById('importStatus');if(!sheetName){if(st)st.innerHTML='<div class="err-msg">Select a sheet</div>';return;}if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Importing...</div>';google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Imported '+fn(r.added)+'!</div>';loadCustTable();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).bulkImportCustomers(sheetName);}
-function loadCustTable(){var search=document.getElementById('custSearch')?document.getElementById('custSearch').value:'';var el=document.getElementById('custTableWrap');google.script.run.withSuccessHandler(function(data){if(!data.length){if(el)el.innerHTML='<div class="empty-state"><div>No customers</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Pincode</th><th>State</th><th>Orders</th><th>Returns</th></tr></thead><tbody>';data.forEach(function(c,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+c.name+'</td><td style="color:#818cf8">'+c.phone+'</td><td>'+c.pincode+'</td><td>'+c.state+'</td><td style="color:#34d399">'+c.totalOrders+'</td><td style="color:#f87171">'+c.returns+'</td></tr>';});h+='</tbody></table></div></div>';if(el)el.innerHTML=h;}).getCustomers(search);}
+function loadCustTable(){var search=document.getElementById('custSearch')?document.getElementById('custSearch').value:'';var el=document.getElementById('custTableWrap');google.script.run.withSuccessHandler(function(data){if(!data.length){if(el)el.innerHTML='<div class="empty-state"><div>No customers</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Pincode</th><th>State</th><th>Orders</th><th>Returns</th></tr></thead><tbody>';data.forEach(function(c,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+c.name+'</td><td style="color:#818cf8">'+c.phone+'</td><td>'+c.pincode+'</td><td>'+c.state+'</td><td style="color:#34d399">'+c.totalOrders+'</td><td style="color:#f87171">'+c.returns+'</td></tr>';});h+='</tbody></table></div></div>';if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }}).getCustomers(search);}
 function renderReports(){var pg=document.getElementById('pg-reports');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Reports</div></div><div class="g2"><div class="card"><div class="card-title">Daily Report</div><button class="btn btn-p btn-full" onclick="sendReport()" style="padding:12px">Send Now</button>'+(S.user.isAdmin?'<button class="btn btn-s btn-full" onclick="setupTriggersUI()" style="padding:10px;margin-top:8px">Setup Triggers</button>':'')+'<div id="reportStatus"></div></div><div class="card"><div class="card-title">Reminders</div><button class="btn btn-s btn-full" onclick="sendReminderUI(false)" style="padding:10px">Send All</button><button class="btn btn-s btn-full" onclick="sendReminderUI(true)" style="padding:10px;margin-top:8px">Send Missing</button><div id="reminderStatus"></div></div></div><div class="g2"><div class="card"><div class="card-title">Export</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn btn-s" onclick="exportDataLocal(\'orders\')">Orders CSV</button><button class="btn btn-s" onclick="exportDataLocal(\'salary\')">Salary CSV</button><button class="btn btn-s" onclick="exportDataLocal(\'employees\')">Employees CSV</button>'+(S.user.isAdmin?'<button class="btn btn-g" onclick="sendSalaryEmails()">Salary Emails</button>':'')+'</div><div id="salEmailStatus"></div></div><div class="card"><div class="card-title">Alerts</div><button class="btn btn-d btn-full" onclick="checkAlertsUI()" style="padding:10px">Run Alerts</button><div id="alertStatus"></div></div></div>';}
 function sendReport(){var el=document.getElementById('reportStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(el)el.innerHTML=r.success?'<div class="ok-msg">Sent!</div>':'<div class="err-msg">Failed</div>';}).sendDailyReport();}
 function setupTriggersUI(){var el=document.getElementById('reportStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(){if(el)el.innerHTML='<div class="ok-msg">Triggers set!</div>';}).setupTriggers();}
@@ -1740,17 +1684,37 @@ function renderMyDash(){
     });
     ofdBanner+='</div>';
   }
-  pg.innerHTML='<div class="profile-hdr"><div class="p-avatar">'+avatar+'</div><div><div class="p-name">'+S.user.name+'</div><div style="font-size:12px;opacity:.6">'+S.user.empId+' - '+S.user.brand+'</div><div class="p-tags"><span class="p-tag">'+S.user.brand+'</span><span class="p-tag">Leaves: '+leaveInfo.used+'/'+leaveInfo.max+'</span></div></div></div>'+ofdBanner+(leaveInfo.isExceeded?'<div class="err-msg" style="margin-bottom:14px">Out of leaves!</div>':'')+(!todayE?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">Not submitted today!</span><button class="btn btn-p" onclick="switchPage(\'orders\')" style="padding:7px 14px;font-size:12px">Submit Now</button></div>':'')+'<div class="card"><div class="card-title">Mark Attendance</div><div style="display:flex;gap:10px"><button class="att-btn" id="attBtnP" onclick="markAtt(\'Present\')">Present</button><button class="att-btn" id="attBtnH" onclick="markAtt(\'Half Day\')">Half Day</button><button class="att-btn" id="attBtnA" onclick="markAtt(\'Absent\')">Absent</button></div><div id="attMarkResult"></div></div><div class="g3" style="margin-bottom:18px"><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Conversion</div><div style="font-size:24px;font-weight:800;color:'+convColor(overallConv)+'">'+overallConv+'%</div></div><div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Net Conv</div><div style="font-size:24px;font-weight:800;color:'+convColor(netConv)+'">'+netConv+'%</div></div><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Enquiries</div><div style="font-size:24px;font-weight:800;color:#34d399">'+fn(allEnq)+'</div></div></div><div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total Orders</div><div class="sv">'+fn(allOrd)+'</div></div><div class="sc" style="--sc-col:#10b981"><div class="sl">Present Days</div><div class="sv">'+t.fD+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Returns</div><div class="sv" style="color:#f87171">'+myRet+'</div></div><div class="sc" style="--sc-col:#f59e0b"><div class="sl">Leaves Left</div><div class="sv" style="color:#fcd34d">'+leaveInfo.remaining+'</div></div></div><div class="table-wrap"><div class="table-hdr"><div class="table-title">My Daily Records</div><div class="table-badge">'+myEntries.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Date</th>'+'<th>Lehya 50</th><th>Lehya 100</th><th>Lehya 200</th><th>Lehya 500</th><th>Astra</th><th>COD</th><th>Prepaid</th>'+'<th>Total</th><th>Att</th></tr></thead><tbody>'+myEntries.slice(0,30).map(function(r){return'<tr><td style="color:var(--text3)">'+r.date+'</td>'+'<td style="color:#fb923c">'+r.gl50+'</td><td style="color:#fb923c">'+r.gl100+'</td><td style="color:#fb923c">'+r.gl200+'</td><td style="color:#fb923c">'+r.gl500+'</td><td style="color:#60a5fa">'+r.astraBottles+'</td><td style="color:#34d399">'+(r.codOrders||0)+'</td><td style="color:#a78bfa">'+(r.prepaidOrders||0)+'</td>'+'<td style="font-weight:800">'+r.totalOrders+'</td><td><span style="color:'+attColor(r.att)+'">'+attLabel(r.att)+'</span></td></tr>';}).join('')+'</tbody></table></div></div>';
+  pg.innerHTML='<div class="profile-hdr"><div class="p-avatar">'+avatar+'</div><div><div class="p-name">'+S.user.name+'</div><div style="font-size:12px;opacity:.6">'+S.user.empId+' - '+S.user.brand+'</div><div class="p-tags"><span class="p-tag">'+S.user.brand+'</span><span class="p-tag">Leaves: '+leaveInfo.used+'/'+leaveInfo.max+'</span></div></div></div>'+ofdBanner+(leaveInfo.isExceeded?'<div class="err-msg" style="margin-bottom:14px">Out of leaves!</div>':'')+(!todayE?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">Not submitted today!</span><button class="btn btn-p" onclick="switchPage(\'orders\')" style="padding:7px 14px;font-size:12px">Submit Now</button></div>':'')+'<div class="card"><div class="card-title">Mark Attendance</div><div style="display:flex;gap:10px"><button class="att-btn" id="attBtnP" onclick="markAtt(\'Present\')">Present</button><button class="att-btn" id="attBtnH" onclick="markAtt(\'Half Day\')">Half Day</button><button class="att-btn" id="attBtnA" onclick="markAtt(\'Absent\')">Absent</button></div><div id="attMarkResult"></div></div><div class="g3" style="margin-bottom:18px"><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Conversion</div><div style="font-size:24px;font-weight:800;color:'+convColor(overallConv)+'">'+overallConv+'%</div></div><div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Net Conv</div><div style="font-size:24px;font-weight:800;color:'+convColor(netConv)+'">'+netConv+'%</div></div><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Enquiries</div><div style="font-size:24px;font-weight:800;color:#34d399">'+fn(allEnq)+'</div></div></div><div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total Orders</div><div class="sv">'+fn(allOrd)+'</div></div><div class="sc" style="--sc-col:#10b981"><div class="sl">Present Days</div><div class="sv">'+t.fD+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Returns</div><div class="sv" style="color:#f87171">'+myRet+'</div></div><div class="sc" style="--sc-col:#f59e0b"><div class="sl">Leaves Left</div><div class="sv" style="color:#fcd34d">'+leaveInfo.remaining+'</div></div></div><div class="table-wrap"><div class="table-hdr"><div class="table-title">My Daily Records</div><div class="table-badge">'+myEntries.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Date</th>'+(isMnv?'<th>Lehya 50</th><th>Lehya 100</th><th>Lehya 200</th><th>Lehya 500</th><th>Astra</th><th>COD</th><th>Prepaid</th>':'<th>Shampoo</th><th>HairOil</th><th>Facewash</th>')+'<th>Total</th><th>Att</th></tr></thead><tbody>'+myEntries.slice(0,30).map(function(r){return'<tr><td style="color:var(--text3)">'+r.date+'</td>'+(isMnv?'<td style="color:#fb923c">'+r.gl50+'</td><td style="color:#fb923c">'+r.gl100+'</td><td style="color:#fb923c">'+r.gl200+'</td><td style="color:#fb923c">'+r.gl500+'</td><td style="color:#60a5fa">'+r.astraBottles+'</td><td style="color:#34d399">'+(r.codOrders||0)+'</td><td style="color:#a78bfa">'+(r.prepaidOrders||0)+'</td>':'<td style="color:#34d399">'+r.shampoo+'</td><td style="color:#fcd34d">'+r.hairOil+'</td><td style="color:#f9a8d4">'+r.facewash+'</td>')+'<td style="font-weight:800">'+r.totalOrders+'</td><td><span style="color:'+attColor(r.att)+'">'+attLabel(r.att)+'</span></td></tr>';}).join('')+'</tbody></table></div></div>';
 }
 function submitCallUpdate(orderId,eyNumber,response,customerName,phone,notifId){var data={orderId:orderId,eyNumber:eyNumber,empId:S.user.empId,empName:S.user.name,called:'Yes',response:response,customerName:customerName,phone:phone,notes:''};google.script.run.withSuccessHandler(function(r){if(r.success){if(notifId)google.script.run.markNotificationSeen(notifId);refreshData();}}).submitDeliveryUpdate(data);}
 function markAllSeenUI(){google.script.run.withSuccessHandler(function(){refreshData();}).markAllNotificationsSeen(S.user.empId);}
 function markAtt(status){['attBtnP','attBtnH','attBtnA'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='att-btn';});var map={'Present':'attBtnP','Half Day':'attBtnH','Absent':'attBtnA'};var cls={'Present':'selected-p','Half Day':'selected-h','Absent':'selected-a'};var el=document.getElementById(map[status]);if(el)el.className='att-btn '+cls[status];var res=document.getElementById('attMarkResult');if(res)res.innerHTML='<div class="loading"><div class="spin-sm"></div> Saving...</div>';google.script.run.withSuccessHandler(function(r){if(res){if(r.success)res.innerHTML='<div class="ok-msg">Marked: '+status+'</div>';else res.innerHTML='<div class="err-msg">'+r.msg+'</div>';}refreshData();}).submitAttendance({date:todayStr(),empId:S.user.empId,empName:S.user.name,role:S.user.role,brand:S.user.brand,status:status,notes:''});}
 function renderMySalary(){var pg=document.getElementById('pg-mySalary');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">My Salary</div></div><div class="card"><div class="card-title">Calculate</div><div class="frow"><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="myMon" value="'+getMonthStr()+'"></div></div><button class="btn btn-p" onclick="calcMySal()" style="padding:12px">Calculate</button><div id="mySalResult" style="margin-top:12px"></div></div>';}
-function calcMySal(){var month=document.getElementById('myMon')?document.getElementById('myMon').value:'';if(!month)return;var el=document.getElementById('mySalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>';var h='<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:20px"><div style="display:flex;justify-content:space-between;margin-bottom:14px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="g4" style="margin-bottom:14px"><div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#34d399">'+r.fullDays+'</div><div style="font-size:9px;color:var(--text3)">FULL</div></div><div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#fcd34d">'+r.halfDays+'</div><div style="font-size:9px;color:var(--text3)">HALF</div></div><div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#f87171">'+r.absentDays+'</div><div style="font-size:9px;color:var(--text3)">ABSENT</div></div><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#818cf8">'+fn(r.totalOrders)+'</div><div style="font-size:9px;color:var(--text3)">ORDERS</div></div></div><div class="sal-row"><span>Base</span><span>'+fnr(r.basic)+'</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(16,185,129,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">+'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:var(--r);padding:12px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-size:22px;font-weight:800;color:#34d399">'+fnr(r.grossWithTea)+'</span></div></div>';if(el)el.innerHTML=h;}).calcSalary(S.user.empId,month,true);}
+function calcMySal(){var month=document.getElementById('myMon')?document.getElementById('myMon').value:'';if(!month)return;var el=document.getElementById('mySalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>';var h='<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:20px"><div style="display:flex;justify-content:space-between;margin-bottom:14px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="g4" style="margin-bottom:14px"><div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#34d399">'+r.fullDays+'</div><div style="font-size:9px;color:var(--text3)">FULL</div></div><div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#fcd34d">'+r.halfDays+'</div><div style="font-size:9px;color:var(--text3)">HALF</div></div><div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#f87171">'+r.absentDays+'</div><div style="font-size:9px;color:var(--text3)">ABSENT</div></div><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#818cf8">'+fn(r.totalOrders)+'</div><div style="font-size:9px;color:var(--text3)">ORDERS</div></div></div><div class="sal-row"><span>Base</span><span>'+fnr(r.basic)+'</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(16,185,129,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">+'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:var(--r);padding:12px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-size:22px;font-weight:800;color:#34d399">'+fnr(r.grossWithTea)+'</span></div></div>';if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }}).calcSalary(S.user.empId,month,true);}
 function renderMyLeave(){var pg=document.getElementById('pg-myLeave');if(!pg)return;var leaveInfo=S.data?S.data.leaveInfo||{used:0,remaining:5,max:5}:{used:0,remaining:5,max:5};pg.innerHTML='<div class="pg-hdr"><div class="pg-title">My Leave</div></div><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div><div style="font-weight:700;color:#818cf8">Balance</div><div style="font-size:11px;color:var(--text3)">Max '+leaveInfo.max+' days/month</div></div><div style="text-align:center"><div style="font-size:28px;font-weight:800;color:'+(leaveInfo.isExceeded?'#f87171':'#34d399')+'">'+leaveInfo.remaining+'</div><div style="font-size:10px;color:var(--text3)">Remaining</div></div></div><div class="g2"><div class="card"><div class="card-title">Apply for Leave</div><div class="fcol"><label class="label">Leave Type</label><select class="select" id="lvType"><option>Sick Leave</option><option>Personal Leave</option><option>Emergency Leave</option><option>Casual Leave</option></select></div><div class="frow"><div class="fcol"><label class="label">From</label><input type="date" id="lvFrom" class="input" oninput="calcLvDays()"></div><div class="fcol"><label class="label">To</label><input type="date" id="lvTo" class="input" oninput="calcLvDays()"></div></div><div id="lvDays" style="display:none;background:rgba(99,102,241,.1);border-radius:var(--r);padding:10px;text-align:center;margin-bottom:12px"><span style="font-size:20px;font-weight:800;color:#818cf8" id="lvDaysCount">0</span><span style="color:#818cf8"> days</span></div><div class="fcol"><label class="label">Reason</label><textarea class="textarea" id="lvReason" rows="3"></textarea></div><button class="btn btn-p btn-full" onclick="submitLeave()" style="padding:12px">Submit</button><div id="lvStatus"></div></div><div class="card"><div class="card-title">History <button class="btn btn-s" onclick="loadMyLeaveHist()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myLeaveHist"><div class="empty-state"><div>Click Load</div></div></div></div></div>';}
 function calcLvDays(){var from=document.getElementById('lvFrom').value,to=document.getElementById('lvTo').value;if(!from||!to)return;var d1=new Date(from),d2=new Date(to);if(d2<d1){document.getElementById('lvDays').style.display='none';return;}var days=Math.round((d2-d1)/(1000*60*60*24))+1;document.getElementById('lvDaysCount').textContent=days;document.getElementById('lvDays').style.display='block';}
 function submitLeave(){var from=document.getElementById('lvFrom').value,to=document.getElementById('lvTo').value,reason=document.getElementById('lvReason').value.trim();var leaveType=document.getElementById('lvType').value;var st=document.getElementById('lvStatus');if(!from||!to||!reason){if(st)st.innerHTML='<div class="err-msg">Fill all fields</div>';return;}var d1=new Date(from),d2=new Date(to);if(d2<d1){if(st)st.innerHTML='<div class="err-msg">Invalid dates</div>';return;}var days=Math.round((d2-d1)/(1000*60*60*24))+1;if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Submitted! ID: '+r.reqId+'</div>';['lvFrom','lvTo','lvReason'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('lvDays').style.display='none';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).applyLeave({empId:S.user.empId,empName:S.user.name,leaveType:leaveType,fromDate:from.split('-').reverse().join('-'),toDate:to.split('-').reverse().join('-'),days:days,reason:reason});}
-function loadMyLeaveHist(){var el=document.getElementById('myLeaveHist');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No requests</div></div>';return;}var h='';rows.forEach(function(r){var sC=r.status==='Approved'?'#34d399':r.status==='Rejected'?'#f87171':'#fcd34d';h+='<div style="border-left:3px solid '+sC+';padding:10px;margin-bottom:8px;background:rgba(255,255,255,.02);border-radius:0 var(--r) var(--r) 0"><div style="display:flex;justify-content:space-between"><span style="font-weight:700">'+r.leaveType+'</span><span style="color:'+sC+';font-size:11px">'+r.status+'</span></div><div style="font-size:11px;color:var(--text3)">'+r.fromDate+' to '+r.toDate+' ('+r.days+' days)</div></div>';});if(el)el.innerHTML=h;}).getLeaves(S.user.empId,false);}
+function loadMyLeaveHist(){var el=document.getElementById('myLeaveHist');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No requests</div></div>';return;}var h='';rows.forEach(function(r){var sC=r.status==='Approved'?'#34d399':r.status==='Rejected'?'#f87171':'#fcd34d';h+='<div style="border-left:3px solid '+sC+';padding:10px;margin-bottom:8px;background:rgba(255,255,255,.02);border-radius:0 var(--r) var(--r) 0"><div style="display:flex;justify-content:space-between"><span style="font-weight:700">'+r.leaveType+'</span><span style="color:'+sC+';font-size:11px">'+r.status+'</span></div><div style="font-size:11px;color:var(--text3)">'+r.fromDate+' to '+r.toDate+' ('+r.days+' days)</div></div>';});if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }}).getLeaves(S.user.empId,false);}
 function renderConfirmation(){
   var pg=document.getElementById('pg-confirmation');if(!pg)return;
   var d=S.data||{};
@@ -1821,7 +1785,7 @@ function renderConfOrders(orders){
     var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
     var addrShort=(o.address||'').substring(0,25)+((o.address||'').length>25?'...':'');
     h+='<tr>'+
-      '<td style="color:#fb923c;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
+      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
       '<td style="font-weight:700">'+o.customerName+'<br><span style="font-size:10px;color:var(--text3)">'+o.phone+'</span></td>'+
       '<td style="font-size:10px;color:var(--text2);max-width:120px" title="'+o.address+'">'+addrShort+'<br>'+o.pincode+' '+o.postOffice+'</td>'+
       '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
@@ -1937,7 +1901,7 @@ function renderLabelQueueTable(orders){
               '<button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Dispatch</button>';
     }
     h+='<tr>'+
-      '<td style="color:#fb923c;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
+      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
       '<td style="font-weight:700">'+o.customerName+'</td>'+
       '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
       '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
@@ -1955,12 +1919,12 @@ function submitEYBatch(){
   var raw=document.getElementById('eyBatch').value.trim();
   var st=document.getElementById('eyBatchStatus');
   if(!raw){if(st)st.innerHTML='<div class="err-msg">Enter EY numbers</div>';return;}
-  var nums=raw.split('\n').map(function(s){return s.trim().toUpperCase();}).filter(function(s){return s.length>=8;});
+  var nums=raw.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
   if(!nums.length){if(st)st.innerHTML='<div class="err-msg">No valid EY numbers</div>';return;}
   if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Adding '+nums.length+' numbers...</div>';
   google.script.run
     .withSuccessHandler(function(r){
-      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ '+(r.msg||'Added '+r.added+' EY numbers!')+'</div>':'<div class="err-msg">'+(r.msg||'Failed')+'</div>';
+      if(st)st.innerHTML=r.success?'<div class="ok-msg">✅ Added '+nums.length+' EY numbers!</div>':'<div class="err-msg">'+r.msg+'</div>';
       if(r.success){var el=document.getElementById('eyBatch');if(el)el.value='';}
     })
     .addEYBatch(nums, S.user.empId);
@@ -2065,7 +2029,17 @@ function lookupDEPincode(){
           '<td style="font-size:11px;color:var(--text3)">'+div+'</td></tr>';
       }).join('')+
       '</tbody></table></div></div>';
-    if(el)el.innerHTML=h;
+    if(el){el.innerHTML=h;
+      // Event delegation - no inline JS needed
+      el.addEventListener('click',function(e){
+        var btn=e.target.closest('.lga-btn');if(!btn)return;
+        var oid=btn.getAttribute('data-oid3');
+        var act=btn.getAttribute('data-act');
+        if(act==='print')printLabelUI(oid);
+        else if(act==='dispatch')markDispatchedUI(oid);
+        else if(act==='ey')lgAssignEY(oid);
+      });
+    }
   }
 
   // Try browser first
@@ -2095,90 +2069,51 @@ function lookupDEPincode(){
 }
 
 function editOrderAdmin(orderId){
-  // Get order from cached data - NO API CALL
-  var allOrders = [];
-  if(S.data){
-    if(S.data.myOrders) allOrders = allOrders.concat(S.data.myOrders);
-    if(S.data.allOrders) allOrders = allOrders.concat(S.data.allOrders);
-    if(S.data.salesOrders) allOrders = allOrders.concat(S.data.salesOrders);
-  }
-  var o = allOrders.find(function(x){return x.orderId===orderId;});
-  if(!o){
-    // Only fallback to API if not in cache
-    google.script.run
-      .withSuccessHandler(function(orders){
-        var found = orders&&orders.find(function(x){return x.orderId===orderId;});
-        if(!found){showToast('Order not found','red');return;}
-        openEditModal(found);
-      })
-      .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
-      .getSalesOrders({});
-    return;
-  }
-  openEditModal(o);
+  // Load order and show inline edit form
+  google.script.run
+    .withSuccessHandler(function(orders){
+      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
+      if(!o){showToast('Order not found','red');return;}
+      // Build modal
+      var modal=document.getElementById('editOrderModal');
+      if(!modal){
+        modal=document.createElement('div');
+        modal.id='editOrderModal';
+        modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+        document.body.appendChild(modal);
+      }
+      modal.innerHTML='<div style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:20px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
+        '<div style="font-weight:800;font-size:15px">✎ Edit Order #'+o.series+'</div>'+
+        '<button onclick="closeEditModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>'+
+        '</div>'+
+        '<div class="form-group"><label class="label">Customer Name</label><input type="text" class="input" id="edit_name" value="'+o.customerName+'"></div>'+
+        '<div class="form-group"><label class="label">Phone</label><input type="text" class="input" id="edit_phone" value="'+o.phone+'"></div>'+
+        '<div class="form-group"><label class="label">Address</label><textarea class="input" id="edit_address" rows="2">'+o.address+'</textarea></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+        '<div class="form-group"><label class="label">Pincode</label><input type="text" class="input" id="edit_pincode" value="'+o.pincode+'" maxlength="6" oninput="if(this.value.length===6)lookupEditPincode()"></div>'+
+        '<div class="form-group"><label class="label">State</label><input type="text" class="input" id="edit_state" value="'+(o.state||'')+'"></div>'+
+        '</div>'+
+        '<div class="form-group"><label class="label">Post Office</label><input type="text" class="input" id="edit_postoffice" value="'+o.postOffice+'"><div id="edit_pstatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+        '<div class="form-group"><label class="label">Grams</label><select class="select" id="edit_grams">'+
+        Object.keys(PRICES).map(function(g){return '<option value="'+g+'"'+(String(o.grams)===String(g)?' selected':'')+'>'+
+          (g==='1000'?'1kg':g+'gm')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="form-group"><label class="label">Payment Type</label><select class="select" id="edit_paytype">'+
+        ['COD','Prepaid','Advance'].map(function(p){return '<option value="'+p+'"'+(o.paymentType===p?' selected':'')+'>'+p+'</option>';}).join('')+
+        '</select></div>'+
+        '</div>'+
+        '<div class="form-group"><label class="label">Notes</label><input type="text" class="input" id="edit_notes" value="'+(o.notes||'')+'"></div>'+
+        '<div id="edit_status" style="margin-bottom:10px"></div>'+
+        '<div style="display:flex;gap:10px">'+
+        '<button onclick="saveEditAdmin(\''+orderId+'\',\''+o.series+'\')" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">💾 Save Changes</button>'+
+        '<button onclick="closeEditModal()" class="btn" style="padding:12px 16px;background:var(--surface2)">Cancel</button>'+
+        '</div></div>';
+      modal.style.display='flex';
+    })
+    .getSalesOrders({});
 }
-
-function openEditModal(o){
-  var orderId = o.orderId;
-  var modal = document.getElementById('editOrderModal');
-  if(!modal){
-    modal = document.createElement('div');
-    modal.id = 'editOrderModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
-    document.body.appendChild(modal);
-  }
-
-  var gramsOpts = Object.keys(PRICES).map(function(g){
-    return '<option value="'+g+'"'+(String(o.grams)===String(g)?' selected':'')+'>'+
-      (g==='1000'?'1kg':g+'gm')+' — ₹'+PRICES[g].selling+'</option>';
-  }).join('');
-
-  var payOpts = ['COD','Prepaid','Advance'].map(function(p){
-    return '<option value="'+p+'"'+(o.paymentType===p?' selected':'')+'>'+p+'</option>';
-  }).join('');
-
-  modal.setAttribute('data-edit-id', orderId);
-  modal.setAttribute('data-edit-series', o.series);
-  modal.innerHTML =
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:20px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
-    '<div style="font-weight:900;font-size:16px;color:var(--text)">✎ Edit Order #'+o.series+'</div>'+
-    '<button onclick="closeEditModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">✕</button>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-    '<div class="form-group" style="grid-column:1/-1"><label class="label">Customer Name *</label>'+
-    '<input type="text" class="input" id="edit_name" value="'+(o.customerName||'')+'" placeholder="Full name"></div>'+
-    '<div class="form-group"><label class="label">Phone *</label>'+
-    '<input type="text" class="input" id="edit_phone" value="'+(o.phone||'')+'" maxlength="10"></div>'+
-    '<div class="form-group"><label class="label">Payment Type</label>'+
-    '<select class="select" id="edit_paytype">'+payOpts+'</select></div>'+
-    '</div>'+
-    '<div class="form-group"><label class="label">Address *</label>'+
-    '<textarea class="input" id="edit_address" rows="2" style="resize:none">'+(o.address||'')+'</textarea></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-    '<div class="form-group"><label class="label">Pincode *</label>'+
-    '<input type="text" class="input" id="edit_pincode" value="'+(o.pincode||'')+'" maxlength="6" placeholder="6 digits" oninput="if(this.value.length===6)lookupEditPincode()">'+
-    '<div id="edit_pstatus" style="font-size:10px;color:var(--text3);margin-top:3px"></div></div>'+
-    '<div class="form-group"><label class="label">State</label>'+
-    '<input type="text" class="input" id="edit_state" value="'+(o.state||'')+'"></div>'+
-    '</div>'+
-    '<div class="form-group"><label class="label">Post Office *</label>'+
-    '<input type="text" class="input" id="edit_postoffice" value="'+(o.postOffice||'')+'" placeholder="Post office name"></div>'+
-    '<div class="form-group"><label class="label">Grams *</label>'+
-    '<select class="select" id="edit_grams">'+gramsOpts+'</select></div>'+
-    '<div class="form-group"><label class="label">Notes</label>'+
-    '<input type="text" class="input" id="edit_notes" value="'+(o.notes||'')+'" placeholder="Optional"></div>'+
-    '<div id="edit_status" style="min-height:16px;margin-bottom:8px"></div>'+
-    '<div style="display:flex;gap:10px">'+
-    '<button onclick="saveEditAdmin()" class="btn btn-p" style="flex:1;padding:13px;font-size:14px;font-weight:700">💾 Save Changes</button>'+
-    '<button onclick="closeEditModal()" class="btn" style="padding:13px 16px;background:var(--surface2);color:var(--text2)">Cancel</button>'+
-    '</div></div>';
-
-  modal.style.display = 'flex';
-  // Focus first field
-  setTimeout(function(){var n=document.getElementById('edit_name');if(n)n.focus();},100);
-}
-
 
 function lookupEditPincode(){
   var pin=document.getElementById('edit_pincode').value.trim();
@@ -2208,11 +2143,7 @@ function lookupEditPincode(){
     });
 }
 
-function saveEditAdmin(){
-  var modal=document.getElementById('editOrderModal');
-  var orderId=modal?modal.getAttribute('data-edit-id'):'';
-  var series=modal?modal.getAttribute('data-edit-series'):'';
-  if(!orderId){showToast('No order selected','red');return;}
+function saveEditAdmin(orderId,series){
   var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
   var data={
     orderId:orderId,
@@ -2253,116 +2184,6 @@ function saveEditAdmin(){
 function closeEditModal(){
   var m=document.getElementById('editOrderModal');
   if(m)m.style.display='none';
-}
-
-
-// OPTIMISTIC UI - update row status instantly without reload
-function updateRowStatus(orderId, newStatus){
-  var rows = document.querySelectorAll('tr');
-  rows.forEach(function(row){
-    // Check if this row contains the orderId
-    var cells = row.querySelectorAll('td');
-    var found = false;
-    cells.forEach(function(c){ if(c.getAttribute('data-oid')===orderId) found=true; });
-    if(!found){
-      // Also check text content of first orange cell
-      cells.forEach(function(c){
-        if(c.style && c.style.color && c.getAttribute && c.getAttribute('data-oid')===orderId) found=true;
-      });
-    }
-    if(found){
-      // Find status badge in this row and update
-      var badges = row.querySelectorAll('.badge, span[class*="badge"]');
-      badges.forEach(function(b){
-        var t=b.textContent.trim();
-        if(['Pending','Confirmed','Rejected','Dispatched','Delivered','Out for Delivery','Label Generated','RTO'].indexOf(t)!==-1){
-          b.textContent = newStatus;
-          b.className = statusBadgeClass(newStatus);
-        }
-      });
-      // Also hide action buttons for terminal states
-      if(newStatus==='Confirmed'||newStatus==='Rejected'){
-        var btns=row.querySelectorAll('.btn-g, .btn-d');
-        btns.forEach(function(b){
-          if(b.textContent.indexOf('Confirm')!==-1||b.textContent.indexOf('Reject')!==-1){
-            b.style.opacity='0.3';b.disabled=true;
-          }
-        });
-      }
-    }
-  });
-}
-
-// Fast row DOM helpers (no full reload)
-function _setRowStatus(orderId, newStatus){
-  var cells=document.querySelectorAll('[data-oid="'+orderId+'"]');
-  cells.forEach(function(cell){
-    var tr=cell.closest('tr');
-    if(!tr)return;
-    tr.querySelectorAll('.badge,.bc,.bg,.by,.br,.bw').forEach(function(b){
-      var t=b.textContent.trim();
-      if(['Pending','Confirmed','Rejected','Dispatched','Delivered','Out for Delivery','RTO','Label Generated'].indexOf(t)!==-1){
-        b.textContent=newStatus;
-        b.className='badge '+statusBadgeClass(newStatus).replace('badge ','');
-      }
-    });
-    // Dim row on final action
-    if(newStatus==='Confirmed'||newStatus==='Rejected'){
-      tr.style.opacity='0.5';
-      tr.style.transition='opacity .3s';
-    }
-  });
-}
-
-function _removeRow(orderId){
-  var cells=document.querySelectorAll('[data-oid="'+orderId+'"]');
-  cells.forEach(function(cell){
-    var tr=cell.closest('tr');
-    if(tr){
-      tr.style.transition='all .3s';
-      tr.style.opacity='0';
-      tr.style.maxHeight='0';
-      setTimeout(function(){tr.remove();},300);
-    }
-  });
-}
-
-function _setRowText(orderId, field, value){
-  var cells=document.querySelectorAll('[data-oid="'+orderId+'"]');
-  cells.forEach(function(cell){
-    var tr=cell.closest('tr');
-    if(!tr)return;
-    var eyCell=tr.querySelector('[data-field="ey"]');
-    if(field==='ey'&&eyCell)eyCell.textContent=value;
-  });
-}
-
-function _updateLabelRowActions(orderId,eyNumber,newStatus){
-  try{
-    var cell=document.querySelector('[data-oid="'+orderId+'"]');
-    if(!cell)return;
-    var tr=cell.closest('tr');
-    if(!tr)return;
-    var actionTd=tr.querySelector('td:last-child');
-    if(!actionTd)return;
-    // Replace EY+Label button with Print+Dispatch
-    actionTd.innerHTML=
-      '<button class="btn" data-act="edit" data-oid2="'+orderId+'" style="padding:3px 8px;font-size:10px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);color:#fb923c;display:block;margin-bottom:3px;width:100%">✎ Edit</button>'+
-      '<button class="btn btn-g" data-act="print" data-oid2="'+orderId+'" style="padding:4px 9px;font-size:10px;margin-bottom:3px;display:block;width:100%">🖨️ Print</button>'+
-      '<button class="btn btn-s" data-act="dispatch" data-oid2="'+orderId+'" style="padding:4px 9px;font-size:10px;display:block;width:100%">🚀 Dispatch</button>';
-    // Attach handlers
-    setTimeout(function(){
-      actionTd.querySelectorAll('[data-oid2]').forEach(function(b){
-        b.onclick=function(){
-          var oid=this.getAttribute('data-oid2');
-          var act=this.getAttribute('data-act');
-          if(act==='edit')editOrderAdmin(oid);
-          else if(act==='print')printLabelUI(oid);
-          else if(act==='dispatch')markDispatchedUI(oid);
-        };
-      });
-    },10);
-  }catch(e){}
 }
 
 window.onload = function() {

@@ -863,19 +863,23 @@ function doLogin(){
 function doLogout(){try{localStorage.removeItem(S.SK);}catch(e){}if(S.timer)clearInterval(S.timer);S.user=null;S.data=null;document.getElementById('app').style.display='none';document.getElementById('loginPage').style.display='block';}
 function initApp(){
   S.user.isAdmin=S.user.isAdmin||(S.user.role&&S.user.role.toLowerCase()==='admin')||S.user.empId==='ADMIN';
+  // Show app INSTANTLY - skeleton renders immediately
+  ['loadScreen','splashScreen','onboardScreen','loginPage'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.style.display='none';
+  });
+  var app=document.getElementById('app');
+  if(app){app.style.display='flex';app.style.flexDirection='row';}
   buildSidebar();
+  setInterval(setLiveTime,60000);setLiveTime();
+  var startPage=S.user.isAdmin?'dashboard':S.user.role==='Confirmation'?'confirmation':S.user.role==='DataEntry'?'dataentry':'myDash';
+  switchPage(startPage); // Show skeleton immediately
+  // Fetch data in background
   loadData(function(){
-    ['loadScreen','splashScreen','onboardScreen','loginPage'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
-    ['loadScreen','splashScreen','onboardScreen','loginPage'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
-    var app=document.getElementById('app');if(app){app.style.display='flex';app.style.flexDirection='row';}
-    setInterval(setLiveTime,60000);setLiveTime();
-    var start=S.user.isAdmin?'dashboard':S.user.role==='Confirmation'?'confirmation':S.user.role==='DataEntry'?'dataentry':'myDash';
-    // Show bot only for Sales team
-    var botFab=document.getElementById('botFab');
-    if(botFab)botFab.style.display=(S.user.role==='Sales'&&!S.user.isAdmin)?'flex':'none';
-    switchPage(start);S.timer=setInterval(refreshData,600000);
+    switchPage(startPage); // Re-render with real data
+    S.timer=setInterval(refreshData,600000);
   });
 }
+
 function buildSidebar(){
   var role=S.user.role;var isAdmin=S.user.isAdmin;var nav=[];
   if(isAdmin){nav=[{sec:'Overview'},{id:'dashboard',icon:'&#x1F4CA;',label:'Dashboard'},{sec:'Sales'},{id:'orders',icon:'&#x1F4CB;',label:'Daily Orders'},{id:'salesOrders',icon:'&#x1F6D2;',label:'Sales Orders'},{id:'enquiries',icon:'&#x1F4F2;',label:'Enquiries'},{id:'performance',icon:'&#x1F3C6;',label:'Performance'},{id:'returns',icon:'&#x21A9;',label:'Returns'},{sec:'Delivery'},{id:'labelGen',icon:'&#x1F3F7;',label:'Label Generation'},{id:'eyManage',icon:'&#x1F4EE;',label:'EY Numbers'},{id:'ofdDash',icon:'&#x1F69A;',label:'OFD Dashboard'},{sec:'People'},{id:'attendance',icon:'&#x1F4C5;',label:'Attendance'},{id:'leaves',icon:'&#x1F33F;',label:'Leaves'},{id:'salary',icon:'&#x1F4B0;',label:'Salary'},{sec:'Operations'},{id:'confirmation',icon:'&#x2705;',label:'Confirmation'},{id:'dataentry',icon:'&#x1F4BB;',label:'Data Entry'},{sec:'Data'},{id:'customers',icon:'&#x1F465;',label:'Customers'},{id:'reports',icon:'&#x1F4E7;',label:'Reports'},{id:'chatbot',icon:'&#x1F916;',label:'Order Lookup'},{sec:'System'},{id:'admin',icon:'&#x2699;',label:'Admin'}];}
@@ -1303,13 +1307,92 @@ function loadMyOrdersTable(){
     el.innerHTML=h;
   }).getSalesOrders({empId:S.user.empId,status:statusF});
 }
-function confirmOrderUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).confirmOrder(orderId,S.user.name);}
-function rejectOrderUI(orderId){var reason=prompt('Rejection reason:');google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).rejectOrder(orderId,reason||'');}
-function assignEYUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){alert('EY Assigned: '+r.eyNumber);loadSalesOrdersTable();}else{alert('Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
-function markDispatchedUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markDispatched(orderId);}
-function markOFDUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markOrderOFD(orderId);}
-function markDeliveredUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markOrderDelivered(orderId);}
-function deleteSalesOrderUI(orderId){if(!confirm('Delete this order?'))return;google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).deleteSalesOrder(orderId);}
+function confirmOrderUI(orderId){
+  // Instant optimistic update
+  _setRowStatus(orderId,'Confirmed');
+  showToast('✅ Confirmed!','green');
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r||!r.success){
+        _setRowStatus(orderId,'Pending');
+        showToast('Error: '+(r&&r.msg||'Failed'),'red');
+        return;
+      }
+      // Remove row from confirmation view after success
+      setTimeout(function(){ _removeRow(orderId); },600);
+    })
+    .withFailureHandler(function(e){
+      _setRowStatus(orderId,'Pending');
+      showToast('Error: '+e.message,'red');
+    })
+    .confirmOrder(orderId,S.user.name||S.user.empId);
+}
+function rejectOrderUI(orderId){
+  // Show inline reason input
+  var row=document.querySelector('[data-oid="'+orderId+'"]');
+  if(row){
+    var tr=row.closest('tr');
+    if(tr){
+      var td=tr.querySelector('td:last-child');
+      if(td){
+        var existingInput=document.getElementById('rej_'+orderId);
+        if(existingInput){existingInput.remove();return;}
+        var box=document.createElement('div');
+        box.id='rej_'+orderId;
+        box.style.cssText='margin-top:6px;display:flex;gap:4px;align-items:center';
+        var btn_id='rejBtn_'+orderId;
+        box.innerHTML='<input id="rejReason_'+orderId+'" type="text" placeholder="Reason (optional)..." '+
+          'style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 8px;font-size:11px;color:var(--text);outline:none">'+
+          '<button id="'+btn_id+'" style="background:#ef4444;border:none;border-radius:6px;color:white;padding:5px 10px;font-size:10px;cursor:pointer;font-weight:700">✗</button>';
+        // Add click handler separately - no inline JS with orderId
+        setTimeout(function(){
+          var b=document.getElementById(btn_id);
+          if(b)b.onclick=function(){_doReject(orderId);};
+        },10);
+        td.appendChild(box);
+        document.getElementById('rejReason_'+orderId).focus();
+        return;
+      }
+    }
+  }
+  _doReject(orderId,'');
+}
+
+function _doReject(orderId){
+  var reasonEl=document.getElementById('rejReason_'+orderId);
+  var reason=reasonEl?reasonEl.value.trim():'';
+  var box=document.getElementById('rej_'+orderId);
+  if(box)box.remove();
+  _setRowStatus(orderId,'Rejected');
+  showToast('Order rejected','orange');
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r||!r.success){
+        _setRowStatus(orderId,'Pending');
+        showToast('Error: '+(r&&r.msg||'Failed'),'red');
+        return;
+      }
+      setTimeout(function(){ _removeRow(orderId); },600);
+    })
+    .withFailureHandler(function(e){
+      _setRowStatus(orderId,'Pending');
+      showToast('Error: '+e.message,'red');
+    })
+    .rejectOrder(orderId,reason);
+}
+function assignEYUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){showToast('EY: '+r.eyNumber,'green');_setRowText(orderId,'ey',r.eyNumber);}else{alert('Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
+function markDispatchedUI(orderId){_setRowStatus(orderId,'Dispatched');showToast('🚀 Dispatched!','green');google.script.run.withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Confirmed');showToast('Error','red');}else _removeRow(orderId);}).withFailureHandler(function(e){_setRowStatus(orderId,'Confirmed');showToast('Error: '+e.message,'red');}).markDispatched(orderId);}
+function markOFDUI(orderId){_setRowStatus(orderId,'Out for Delivery');showToast('Out for Delivery ✅','green');google.script.run.withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Dispatched');showToast('Error','red');}}).withFailureHandler(function(e){showToast('Error: '+e.message,'red');}).markOrderOFD(orderId);}
+function markDeliveredUI(orderId){_setRowStatus(orderId,'Delivered');showToast('✅ Delivered!','green');google.script.run.withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Out for Delivery');showToast('Error','red');}else _removeRow(orderId);}).withFailureHandler(function(e){showToast('Error: '+e.message,'red');}).markOrderDelivered(orderId);}
+function deleteSalesOrderUI(orderId){
+  if(!confirm('Delete this order?'))return;
+  _removeRow(orderId);
+  showToast('Order deleted','orange');
+  google.script.run
+    .withSuccessHandler(function(r){if(!r||!r.success)showToast('Delete failed - refresh','red');})
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .deleteSalesOrder(orderId);
+}
 function renderLabelGen(){var pg=document.getElementById('pg-labelGen');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Label Generation</div></div><div id="labelGenList"><div class="loading"><div class="spin-sm"></div></div></div><div id="labelPrintArea"></div>';loadConfirmedOrdersForLabel();}
 function loadConfirmedOrdersForLabel(){var el=document.getElementById('labelGenList');if(!el)return;google.script.run.withSuccessHandler(function(orders){var ready=orders.filter(function(o){return o.status==='Confirmed'||o.status==='Label Generated';});if(!ready.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F3F7;</div><div>No orders ready for labels</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Series</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>EY Number</th><th>Status</th><th>Actions</th></tr></thead><tbody>';ready.forEach(function(o){var actions='';if(o.status==='Confirmed'){actions='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:5px 11px;font-size:11px">Assign EY + Label</button>';}else if(o.status==='Label Generated'){actions='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:5px 11px;font-size:11px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:5px 11px;font-size:11px">Dispatch</button>';}h+='<tr><td style="color:#818cf8;font-weight:700">#'+o.series+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+o.phone+'</td><td>'+o.grams+'gm</td><td style="color:#34d399">'+fnr(o.finalPrice)+'</td><td style="color:#22d3ee;font-weight:700">'+(o.eyNumber||'Not assigned')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({});}
 function assignEYAndLabel(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){printLabelUI(orderId);loadConfirmedOrdersForLabel();}else{alert('EY Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
@@ -1436,7 +1519,7 @@ function resetPerfF(){['perfMonF','perfEmpF','perfBrandF'].forEach(function(id){
 function renderReturns(){var pg=document.getElementById('pg-returns');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Returns</div></div><div class="g2"><div class="card"><div class="card-title">Log Return</div><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="retDate" value="'+todayStr()+'"></div><div class="fcol"><label class="label">Emp ID</label><input type="text" class="input" id="retEmpId"></div></div><div class="frow"><div class="fcol"><label class="label">Brand</label><select class="select" id="retBrand"><option>Manveera</option><option>Dhaara Wellness</option></select></div><div class="fcol"><label class="label">Product</label><input type="text" class="input" id="retProduct"></div></div><div class="frow"><div class="fcol"><label class="label">Qty</label><input type="number" class="input" id="retQty" min="1"></div><div class="fcol"><label class="label">Reason</label><input type="text" class="input" id="retReason"></div></div><button class="btn btn-d btn-full" onclick="submitReturnUI()" style="padding:12px">Log Return</button><div id="retStatus"></div></div><div class="card"><div class="card-title">Overview</div>'+(function(){var rm=S.data?S.data.retMap||{}:{};var empMap=S.data?S.data.empMap||{}:{};var items=Object.entries(rm).sort(function(a,b){return b[1]-a[1];}).slice(0,8);return items.length?items.map(function(e){var emp=empMap[e[0]]||{};return'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>'+(emp.name||e[0])+'</span><span style="font-weight:800;color:#f87171">'+e[1]+'</span></div>';}).join(''):'<div class="empty-state"><div>No returns</div></div>';})()+'</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="retDateF" onchange="loadRetTable()"></select><span class="fl">Month:</span><select class="fsel" id="retMonF" onchange="loadRetTable()"></select></div><div id="retTable"></div>';populateFilters();loadRetTable();}
 function submitReturnUI(){var d={date:document.getElementById('retDate').value,empId:document.getElementById('retEmpId').value.trim().toUpperCase(),empName:'',brand:document.getElementById('retBrand').value,product:document.getElementById('retProduct').value.trim(),quantity:Number(document.getElementById('retQty').value)||0,reason:document.getElementById('retReason').value.trim(),enteredBy:S.user.empId};var empMap=S.data?S.data.empMap||{}:{};if(empMap[d.empId])d.empName=empMap[d.empId].name;if(!d.empId||!d.quantity||!d.product){document.getElementById('retStatus').innerHTML='<div class="err-msg">Fill all fields</div>';return;}google.script.run.withSuccessHandler(function(r){var st=document.getElementById('retStatus');if(r.success){if(st)st.innerHTML='<div class="ok-msg">Logged!</div>';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).addReturn(d);}
 function loadRetTable(){var dateF=document.getElementById('retDateF')?document.getElementById('retDateF').value:'';var monF=document.getElementById('retMonF')?document.getElementById('retMonF').value:'';var el=document.getElementById('retTable');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){el.innerHTML='<div class="empty-state"><div>No returns</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Product</th><th>Qty</th><th>Reason</th>'+(S.user.isAdmin?'<th>Del</th>':'')+'</tr></thead><tbody>';rows.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td>'+r.product+'</td><td style="color:#f87171;font-weight:800">'+r.quantity+'</td><td>'+r.reason+'</td>'+(S.user.isAdmin?'<td><button onclick="deleteReturnUI(\''+r.date+'\',\''+r.empId+'\',\''+r.product+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Del</button></td>':'')+'</tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getReturns({date:dateF,month:monF});}
-function deleteReturnUI(date,empId,product){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success){refreshData();loadRetTable();}}).deleteReturn(date,empId,product);}
+function deleteReturnUI(date,empId,product){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success){showToast('✅ Entry submitted!','green');loadRetTable();}}).deleteReturn(date,empId,product);}
 function renderAttendance(){var pg=document.getElementById('pg-attendance');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Attendance</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="attDateF" onchange="filterAtt()"></select><span class="fl">Month:</span><select class="fsel" id="attMonF" onchange="filterAtt()"></select><span class="fl">Employee:</span><select class="fsel" id="attEmpF" onchange="filterAtt()"><option value="">All</option></select><button class="btn btn-s" onclick="resetAttF()">Reset</button></div><div id="attWrap"><div class="loading"><div class="spin-sm"></div></div></div>';populateFilters();var td=document.getElementById('attDateF');if(td)td.value=todayStr();filterAtt();}
 function filterAtt(){var dateF=document.getElementById('attDateF')?document.getElementById('attDateF').value:'';var monF=document.getElementById('attMonF')?document.getElementById('attMonF').value:'';var empF=document.getElementById('attEmpF')?document.getElementById('attEmpF').value:'';var aw=document.getElementById('attWrap');if(!aw)return;aw.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(records){if(!records.length){aw.innerHTML='<div class="empty-state"><div>No records</div></div>';return;}var fD=records.filter(function(r){return r.att===1;}).length,hD=records.filter(function(r){return r.att===0.5;}).length,aD=records.filter(function(r){return r.att===0;}).length;var h='<div class="att-grid"><div class="att-block att-p"><div class="att-num">'+fD+'</div><div class="att-lbl">Full</div></div><div class="att-block att-h"><div class="att-num">'+hD+'</div><div class="att-lbl">Half</div></div><div class="att-block att-a"><div class="att-num">'+aD+'</div><div class="att-lbl">Absent</div></div><div class="att-block att-t"><div class="att-num">'+records.length+'</div><div class="att-lbl">Records</div></div></div>';h+='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Status</th></tr></thead><tbody>';records.forEach(function(r){h+='<tr><td>'+r.date+'</td><td style="font-weight:700">'+r.empName+'</td><td><span style="color:'+attColor(r.att)+'">'+r.status+'</span></td></tr>';});h+='</tbody></table></div></div>';aw.innerHTML=h;}).withFailureHandler(function(e){aw.innerHTML='<div class="err-msg">'+e.message+'</div>';}).getAttendanceRecords({date:dateF,month:monF,empId:empF});}
 function resetAttF(){['attDateF','attMonF','attEmpF'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});filterAtt();}
@@ -2173,6 +2256,50 @@ function updateRowStatus(orderId, newStatus){
         });
       }
     }
+  });
+}
+
+// Fast row DOM helpers (no full reload)
+function _setRowStatus(orderId, newStatus){
+  var cells=document.querySelectorAll('[data-oid="'+orderId+'"]');
+  cells.forEach(function(cell){
+    var tr=cell.closest('tr');
+    if(!tr)return;
+    tr.querySelectorAll('.badge,.bc,.bg,.by,.br,.bw').forEach(function(b){
+      var t=b.textContent.trim();
+      if(['Pending','Confirmed','Rejected','Dispatched','Delivered','Out for Delivery','RTO','Label Generated'].indexOf(t)!==-1){
+        b.textContent=newStatus;
+        b.className='badge '+statusBadgeClass(newStatus).replace('badge ','');
+      }
+    });
+    // Dim row on final action
+    if(newStatus==='Confirmed'||newStatus==='Rejected'){
+      tr.style.opacity='0.5';
+      tr.style.transition='opacity .3s';
+    }
+  });
+}
+
+function _removeRow(orderId){
+  var cells=document.querySelectorAll('[data-oid="'+orderId+'"]');
+  cells.forEach(function(cell){
+    var tr=cell.closest('tr');
+    if(tr){
+      tr.style.transition='all .3s';
+      tr.style.opacity='0';
+      tr.style.maxHeight='0';
+      setTimeout(function(){tr.remove();},300);
+    }
+  });
+}
+
+function _setRowText(orderId, field, value){
+  var cells=document.querySelectorAll('[data-oid="'+orderId+'"]');
+  cells.forEach(function(cell){
+    var tr=cell.closest('tr');
+    if(!tr)return;
+    var eyCell=tr.querySelector('[data-field="ey"]');
+    if(field==='ey'&&eyCell)eyCell.textContent=value;
   });
 }
 

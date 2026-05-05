@@ -467,7 +467,7 @@ setTimeout(function(){
     </div>
     <div class="form-group">
       <label>GAS Deployment URL</label>
-      <input type="url" id="apiUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+      <input type="text" id="apiUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:11px">
       <div id="setupErr" style="color:#f87171;font-size:11px;margin-top:4px;min-height:14px"></div>
     </div>
     <button class="btn-login" onclick="saveAPIUrl()">Connect &amp; Open CRM</button>
@@ -621,7 +621,7 @@ setTimeout(function(){
       <div class="login-err" id="lerr"></div>
     </div>
     <div style="text-align:center;margin-top:12px">
-      <button onclick="localStorage.removeItem('vesino_api_url');location.reload()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline">Change API URL</button>
+      <button onclick="showSetupFromLogin()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline">Change API URL</button>
     </div>
   </div></div>
 </div>
@@ -652,90 +652,9 @@ var API_URL = '';
 
 function loadConfig() {
   var s = localStorage.getItem('vesino_api_url');
-  if (s) { API_URL = s; return true; }
+  if (s && s.indexOf('script.google.com') !== -1) { API_URL = s; return true; }
   return false;
 }
-function saveAPIUrl() {
-  var url = document.getElementById('apiUrlInput').value.trim();
-  if (!url || url.indexOf('script.google.com') === -1) {
-    document.getElementById('setupErr').textContent = 'Please enter a valid GAS URL'; return;
-  }
-  API_URL = url; localStorage.setItem('vesino_api_url', url);
-  document.getElementById('setupScreen').style.display = 'none';
-  document.getElementById('loginPage').style.display = 'block';
-}
-
-async function apiCall(action, data) {
-  data = data || {};
-  if (!API_URL) throw new Error('API URL not configured');
-  var payload = Object.assign({action: action}, action !== 'login' ? {token: 'VCK_2E036D34005327EEEA8A79AE7D526D39'} : {}, data);
-  var qs = Object.keys(payload).map(function(k) {
-    return encodeURIComponent(k) + '=' + encodeURIComponent(payload[k] == null ? '' : payload[k]);
-  }).join('&');
-  try {
-    var r = await fetch(API_URL + '?' + qs);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return await r.json();
-  } catch(e) {
-    var r2 = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-    return await r2.json();
-  }
-}
-
-var GAS_MAP = {
-  login: function(a){return{id:a[0],pw:a[1]};},
-  getDashboardData: function(a){return{empId:a[0],isAdmin:a[1]?'true':'false'};},
-  submitEntry: function(a){return a[0]||{};},
-  getSalesOrders: function(a){var f=a[0]||{};return{status:f.status||'',date:f.date||'',empId:f.empId||''};},
-  submitSalesOrder: function(a){return a[0]||{};},
-  confirmOrder: function(a){return{orderId:a[0],confirmedBy:a[1]};},
-  rejectOrder: function(a){return{orderId:a[0],reason:a[1]||''};},
-  assignEYToOrder: function(a){return{orderId:a[0],empId:a[1]};},
-  markDispatched: function(a){return{orderId:a[0]};},
-  markOrderOFD: function(a){return{orderId:a[0]};},
-  markOrderDelivered: function(a){return{orderId:a[0]};},
-  deleteSalesOrder: function(a){return{orderId:a[0]};},
-  addEYBatch: function(a){return{list:JSON.stringify(a[0]||[]),empId:a[1]};},
-  getEYStats: function(a){return{};},
-  getLeaves: function(a){return{empId:a[0]||'',isAdmin:a[1]?'true':'false'};},
-  applyLeave: function(a){return a[0]||{};},
-  reviewLeave: function(a){return{reqId:a[0],action:a[1],reviewedBy:a[2]};},
-  deleteLeave: function(a){return{reqId:a[0]};},
-  calcSalary: function(a){return{empId:a[0],month:a[1]};},
-  getAllSalaries: function(a){return{month:a[0]};},
-  getReturns: function(a){var f=a[0]||{};return{date:f.date||'',month:f.month||'',empId:f.empId||''};},
-  addReturn: function(a){return a[0]||{};},
-  deleteReturn: function(a){return{date:a[0],empId:a[1],product:a[2]};},
-  submitAttendance: function(a){return a[0]||{};},
-  getAttendanceRecords: function(a){var f=a[0]||{};return{date:f.date||'',month:f.month||'',empId:f.empId||''};},
-  addEmployee: function(a){return a[0]||{};},
-  deleteEmployee: function(a){return{empId:a[0]};},
-  getNextEmployeeId: function(a){return{};},
-  submitEnquiryLog: function(a){return a[0]||{};},
-  getEnquiriesLog: function(a){var f=a[0]||{};return{date:f.date||'',month:f.month||'',empId:f.empId||''};},
-  getCustomers: function(a){return{q:a[0]||''};},
-  lookupCustomer: function(a){return{phone:a[0]};},
-  bulkImportCustomers: function(a){return{sheetName:a[0]};},
-  getAvailableSheets: function(a){return{};},
-  submitDeliveryUpdate: function(a){return a[0]||{};},
-  getOFDSummary: function(a){return{};},
-  getLabelData: function(a){return{orderId:a[0]};},
-  getOrderByPhone: function(a){return{phone:a[0]};},
-  submitConfirmationDailyCount: function(a){return a[0]||{};},
-  getConfirmationDashData: function(a){return{empId:a[0],isAdmin:a[1]?'true':'false'};},
-  submitDataEntryLog: function(a){return a[0]||{};},
-  getDataEntryDashData: function(a){return{empId:a[0]};},
-  getEmployeePerformance: function(a){return{empId:a[0],month:a[1]};},
-  lookupPincode: function(a){return{pincode:a[0]};},
-  sendDailyReport: function(a){return{};},
-  setupTriggers: function(a){return{};},
-  exportData: function(a){return{type:a[0]};},
-  checkAlerts: function(a){return{};},
-  markAllNotificationsSeen: function(a){return{empId:a[0]};},
-  markNotificationSeen: function(a){return{notifId:a[0]};},
-  sendReminder: function(a){return{missing:a[0]};},
-  sendMonthlySalaryEmails: function(a){return{};}
-};
 
 function makeChain(sFn, fFn) {
   var chain = {};
@@ -891,6 +810,12 @@ function numberToWords(n){var a=['','One','Two','Three','Four','Five','Six','Sev
 function doLogin(){
   var id=document.getElementById('lid').value.trim(),pw=document.getElementById('lpw').value.trim();
   if(!id||!pw){document.getElementById('lerr').textContent='Enter ID and password';return;}
+  // Check API URL
+  if(!API_URL||API_URL.indexOf('script.google.com')===-1){
+    var lerr=document.getElementById('lerr');
+    if(lerr)lerr.innerHTML='API URL not set. <a href="#" onclick="showSetupFromLogin()" style="color:#fb923c;text-decoration:underline">Tap here to configure →</a>';
+    return;
+  }
   var btn=document.getElementById('lbtn');btn.textContent='Signing in...';btn.disabled=true;document.getElementById('lerr').textContent='';
   google.script.run
     .withSuccessHandler(function(r){
@@ -2104,6 +2029,32 @@ function printLabelUI(orderId){
     .getLabelData(orderId);
 }
 
+
+function showSetupFromLogin(){
+  var lp=document.getElementById('loginPage');
+  var ss=document.getElementById('setupScreen');
+  if(lp)lp.style.display='none';
+  if(ss)ss.style.display='flex';
+}
+
+function saveAPIUrl(){
+  var url=(document.getElementById('apiUrlInput')||{}).value;
+  if(!url)url='';
+  url=url.trim();
+  if(!url||url.indexOf('script.google.com')===-1){
+    var err=document.getElementById('setupErr');
+    if(err)err.textContent='Please enter a valid Google Apps Script URL';
+    return;
+  }
+  API_URL=url;
+  localStorage.setItem('vesino_api_url',url);
+  // Go to login
+  var ss=document.getElementById('setupScreen');
+  var lp=document.getElementById('loginPage');
+  if(ss)ss.style.display='none';
+  if(lp)lp.style.display='block';
+  showToast('API URL saved! You can now login.','green');
+}
 
 document.addEventListener("DOMContentLoaded", function() {
 

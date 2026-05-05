@@ -1395,8 +1395,42 @@ function deleteSalesOrderUI(orderId){
 }
 function renderLabelGen(){var pg=document.getElementById('pg-labelGen');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Label Generation</div></div><div id="labelGenList"><div class="loading"><div class="spin-sm"></div></div></div><div id="labelPrintArea"></div>';loadConfirmedOrdersForLabel();}
 function loadConfirmedOrdersForLabel(){var el=document.getElementById('labelGenList');if(!el)return;google.script.run.withSuccessHandler(function(orders){var ready=orders.filter(function(o){return o.status==='Confirmed'||o.status==='Label Generated';});if(!ready.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F3F7;</div><div>No orders ready for labels</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>Series</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>EY Number</th><th>Status</th><th>Actions</th></tr></thead><tbody>';ready.forEach(function(o){var actions='';if(o.status==='Confirmed'){actions='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:5px 11px;font-size:11px">Assign EY + Label</button>';}else if(o.status==='Label Generated'){actions='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:5px 11px;font-size:11px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:5px 11px;font-size:11px">Dispatch</button>';}h+='<tr><td style="color:#818cf8;font-weight:700">#'+o.series+'</td><td style="font-weight:700">'+o.customerName+'</td><td>'+o.phone+'</td><td>'+o.grams+'gm</td><td style="color:#34d399">'+fnr(o.finalPrice)+'</td><td style="color:#22d3ee;font-weight:700">'+(o.eyNumber||'Not assigned')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td>'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({});}
-function assignEYAndLabel(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){printLabelUI(orderId);loadConfirmedOrdersForLabel();}else{alert('EY Error: '+r.msg);}}).assignEYToOrder(orderId,S.user.empId);}
-function printLabelUI(orderId){google.script.run.withSuccessHandler(function(labelData){if(!labelData){alert('Label data not found');return;}showLabelPreview(labelData);}).getLabelData(orderId);}
+function assignEYAndLabel(orderId){
+  // Show loading state on button
+  var btn=document.querySelector('[data-oid="'+orderId+'"] ~ * .ey-btn,[data-oid="'+orderId+'"]').closest('tr');
+  showToast('Assigning EY number...','orange');
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r||!r.success){
+        showToast('❌ '+(r&&r.msg?r.msg:'No EY available - add batch first'),'red');
+        return;
+      }
+      showToast('✅ EY: '+r.eyNumber,'green');
+      // Update row immediately
+      _setRowStatus(orderId,'Label Generated');
+      var eyCell=document.querySelector('[data-oid="'+orderId+'"]').closest('tr').querySelector('[data-field="ey"]');
+      if(eyCell)eyCell.textContent=r.eyNumber;
+      // Update actions buttons in row
+      _updateLabelRowActions(orderId,r.eyNumber,'Label Generated');
+      // Show label preview directly (no second API call)
+      if(r.labelData)showLabelPreview(r.labelData);
+      else printLabelUI(orderId);
+    })
+    .withFailureHandler(function(e){
+      showToast('Error: '+e.message,'red');
+    })
+    .assignEYToOrder(orderId,S.user.empId);
+}
+function printLabelUI(orderId){
+  showToast('Loading label...','orange');
+  google.script.run
+    .withSuccessHandler(function(d){
+      if(!d){showToast('Label data not found','red');return;}
+      showLabelPreview(d);
+    })
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .getLabelData(orderId);
+}
 function showLabelPreview(d){
   var el=document.getElementById('labelPrintArea');if(!el)return;
   var isCOD=d.paymentType==='COD';
@@ -2301,6 +2335,34 @@ function _setRowText(orderId, field, value){
     var eyCell=tr.querySelector('[data-field="ey"]');
     if(field==='ey'&&eyCell)eyCell.textContent=value;
   });
+}
+
+function _updateLabelRowActions(orderId,eyNumber,newStatus){
+  try{
+    var cell=document.querySelector('[data-oid="'+orderId+'"]');
+    if(!cell)return;
+    var tr=cell.closest('tr');
+    if(!tr)return;
+    var actionTd=tr.querySelector('td:last-child');
+    if(!actionTd)return;
+    // Replace EY+Label button with Print+Dispatch
+    actionTd.innerHTML=
+      '<button class="btn" data-act="edit" data-oid2="'+orderId+'" style="padding:3px 8px;font-size:10px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);color:#fb923c;display:block;margin-bottom:3px;width:100%">✎ Edit</button>'+
+      '<button class="btn btn-g" data-act="print" data-oid2="'+orderId+'" style="padding:4px 9px;font-size:10px;margin-bottom:3px;display:block;width:100%">🖨️ Print</button>'+
+      '<button class="btn btn-s" data-act="dispatch" data-oid2="'+orderId+'" style="padding:4px 9px;font-size:10px;display:block;width:100%">🚀 Dispatch</button>';
+    // Attach handlers
+    setTimeout(function(){
+      actionTd.querySelectorAll('[data-oid2]').forEach(function(b){
+        b.onclick=function(){
+          var oid=this.getAttribute('data-oid2');
+          var act=this.getAttribute('data-act');
+          if(act==='edit')editOrderAdmin(oid);
+          else if(act==='print')printLabelUI(oid);
+          else if(act==='dispatch')markDispatchedUI(oid);
+        };
+      });
+    },10);
+  }catch(e){}
 }
 
 window.onload = function() {

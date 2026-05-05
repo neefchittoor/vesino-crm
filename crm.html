@@ -2103,40 +2103,65 @@ function saveGasUrl(){
 
 function downloadLabelPDF(){
   var d=window._currentLabelData;
-  if(!d){showToast('No label data','red');return;}
-  showToast('Preparing PDF...','orange');
-  // Load jsPDF on demand
-  if(!window.jspdf){
-    var s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    s.onload=function(){_doPDFDownload(d);};
-    s.onerror=function(){
-      // Fallback: use print dialog
-      window.print();
-    };
-    document.head.appendChild(s);
-  } else {
-    _doPDFDownload(d);
-  }
-}
+  if(!d){showToast('No label data - open a label first','red');return;}
+  var larea=document.getElementById('printableLabel');
+  if(!larea){showToast('No label visible - click Print on an order first','orange');return;}
 
-function _doPDFDownload(d){
-  try{
-    var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a5'});
-    var larea=document.getElementById('printableLabel');
-    if(!larea){showToast('Open a label preview first','orange');return;}
-    // Use html method if available, else text fallback
-    pdf.html(larea,{
-      callback:function(doc){
-        doc.save('Label_'+d.series+'_'+d.eyNumber+'.pdf');
-        showToast('✅ PDF downloaded!','green');
-      },
-      x:5,y:5,width:200,windowWidth:680
+  showToast('Loading PDF tools...','orange');
+
+  function loadScript(url,cb){
+    var s=document.createElement('script');s.src=url;
+    s.onload=function(){cb();};
+    s.onerror=function(){cb(new Error('Failed to load '+url));};
+    document.head.appendChild(s);
+  }
+
+  function doCapture(){
+    showToast('Generating PDF...','orange');
+    // Force white background on label
+    larea.style.background='white';
+    larea.style.color='black';
+
+    html2canvas(larea,{
+      scale:2,
+      useCORS:true,
+      allowTaint:true,
+      backgroundColor:'#ffffff',
+      logging:false,
+      onclone:function(doc){
+        var el=doc.getElementById('printableLabel');
+        if(el){el.style.background='white';el.style.color='black';}
+      }
+    }).then(function(canvas){
+      var imgData=canvas.toDataURL('image/jpeg',0.98);
+      var pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a5'});
+      var W=pdf.internal.pageSize.getWidth();
+      var H=pdf.internal.pageSize.getHeight();
+      pdf.addImage(imgData,'JPEG',3,3,W-6,H-6);
+      var fname='Label_'+d.series+'_'+d.eyNumber+'.pdf';
+      pdf.save(fname);
+      showToast('✅ PDF saved: '+fname,'green');
+    }).catch(function(e){
+      showToast('PDF error: '+e.message,'red');
     });
-  }catch(e){
-    // Fallback to print
-    showToast('Using print dialog...','orange');
-    setTimeout(function(){window.print();},300);
+  }
+
+  // Load both libraries then generate
+  if(window.html2canvas&&window.jspdf){
+    doCapture();
+  } else if(window.html2canvas&&!window.jspdf){
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(e){
+      if(e){showToast('Failed to load jsPDF','red');return;}
+      doCapture();
+    });
+  } else {
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(e1){
+      if(e1){showToast('Failed to load html2canvas','red');return;}
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(e2){
+        if(e2){showToast('Failed to load jsPDF','red');return;}
+        doCapture();
+      });
+    });
   }
 }
 

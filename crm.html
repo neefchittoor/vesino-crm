@@ -808,15 +808,24 @@ function numberToWords(n){var a=['','One','Two','Three','Four','Five','Six','Sev
 
 
 function doLogin(){
-  var id=document.getElementById('lid').value.trim(),pw=document.getElementById('lpw').value.trim();
-  if(!id||!pw){document.getElementById('lerr').textContent='Enter ID and password';return;}
-  // Check API URL
-  if(!API_URL||API_URL.indexOf('script.google.com')===-1){
-    var lerr=document.getElementById('lerr');
-    if(lerr)lerr.innerHTML='API URL not set. <a href="#" onclick="showSetupFromLogin()" style="color:#fb923c;text-decoration:underline">Tap here to configure →</a>';
+  var id=document.getElementById('lid').value.trim();
+  var pw=document.getElementById('lpw').value.trim();
+  var gasInput=document.getElementById('gasUrlInput');
+  var gasUrl=gasInput?gasInput.value.trim():'';
+  var lerr=document.getElementById('lerr');
+
+  // Save and use the URL from input if provided
+  if(gasUrl&&gasUrl.indexOf('script.google.com')!==-1){
+    API_URL=gasUrl;
+    try{localStorage.setItem('vesino_api_url',gasUrl);}catch(e){}
+  } else if(!API_URL||API_URL.indexOf('script.google.com')===-1){
+    if(lerr)lerr.textContent='Enter your Google Apps Script URL above first';
+    if(gasInput){gasInput.focus();gasInput.style.borderColor='#ef4444';}
     return;
   }
-  var btn=document.getElementById('lbtn');btn.textContent='Signing in...';btn.disabled=true;document.getElementById('lerr').textContent='';
+
+  if(!id||!pw){if(lerr)lerr.textContent='Enter Employee ID and password';return;}
+  var btn=document.getElementById('lbtn');btn.textContent='Signing in...';btn.disabled=true;if(lerr)lerr.textContent='';
   google.script.run
     .withSuccessHandler(function(r){
       btn.textContent='Sign In';btn.disabled=false;
@@ -2063,6 +2072,10 @@ document.addEventListener("DOMContentLoaded", function() {
     ['splashScreen','onboardScreen','loadScreen','setupScreen'].forEach(function(id){
       var el=document.getElementById(id);if(el)el.style.display='none';
     });
+    // Pre-fill saved URL
+    var saved_url=localStorage.getItem('vesino_api_url')||'';
+    var gasInp=document.getElementById('gasUrlInput');
+    if(gasInp&&saved_url)gasInp.value=saved_url;
     // Show login
     var lp=document.getElementById('loginPage');
     if(lp){lp.style.display='block';}

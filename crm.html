@@ -1225,185 +1225,422 @@ function deleteSalesOrderUI(orderId){if(!confirm('Delete this order?'))return;go
 function renderLabelGen(){
   var pg=document.getElementById('pg-labelGen');if(!pg)return;
   pg.innerHTML=
-  '<div class="pg-hdr"><div class="pg-title">🏷️ Label Generation</div><div class="pg-sub">CSV Export & Batch Printing</div></div>'+
-  '<div class="card"><div class="card-title">📦 Dispatch Session</div>'+
-  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'+
-  '<button onclick="selectSession(this)" data-session="1PM" class="sess-btn" style="padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer">🕐 1 PM Batch</button>'+
-  '<button onclick="selectSession(this)" data-session="6PM" class="sess-btn" style="padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer">🕕 6 PM Batch</button>'+
-  '<button onclick="selectSession(this)" data-session="7PM" class="sess-btn" style="padding:14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer">🕖 7 PM Batch</button>'+
-  '<button onclick="selectSession(this)" data-session="ALL" class="sess-btn" style="padding:14px;border-radius:12px;background:linear-gradient(135deg,#ea580c,#f97316);border:none;color:white;font-size:14px;font-weight:700;cursor:pointer">📦 All Orders</button>'+
+  '<div class="pg-hdr"><div class="pg-title">🏷️ Label Generation</div><div class="pg-sub">India Post Style — Bulk Labels & CSV</div></div>'+
+
+  // ── Step 1: Select & Filter ──
+  '<div class="card">'+
+  '<div class="card-title" style="display:flex;align-items:center;gap:8px"><span style="background:linear-gradient(135deg,#ea580c,#f97316);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900">1</span> Select Orders</div>'+
+  '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px" id="sessionBtns">'+
+  '<button onclick="lgSession(this)" data-s="1PM" class="sess-btn" style="padding:13px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-weight:700;cursor:pointer">🕐 1 PM Batch</button>'+
+  '<button onclick="lgSession(this)" data-s="6PM" class="sess-btn" style="padding:13px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-weight:700;cursor:pointer">🕕 6 PM Batch</button>'+
+  '<button onclick="lgSession(this)" data-s="7PM" class="sess-btn" style="padding:13px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-weight:700;cursor:pointer">🕖 7 PM Batch</button>'+
+  '<button onclick="lgSession(this)" data-s="ALL" class="sess-btn active-sess" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#ea580c,#f97316);border:none;color:white;font-weight:700;cursor:pointer">📦 All</button>'+
   '</div>'+
-  '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
-  '<select class="fsel" id="lgStatus"><option value="Label Generated">Label Generated</option><option value="Confirmed">Confirmed</option><option value="">All</option></select>'+
-  '<select class="fsel" id="lgPay"><option value="">All Payment</option><option value="COD">COD</option><option value="Prepaid">Prepaid</option><option value="Advance">Advance</option></select>'+
-  '<select class="fsel" id="lgProd"><option value="">All Products</option><option value="Lehya">Lehya</option><option value="Astra">Astra</option></select>'+
-  '<button class="btn btn-p" onclick="lgLoad()" style="padding:8px 18px">🔄 Load</button>'+
+  '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+
+  '<select class="fsel" id="lgStatus"><option value="Label Generated">Label Generated</option><option value="Confirmed">Confirmed</option><option value="">All Status</option></select>'+
+  '<select class="fsel" id="lgPay"><option value="">All Payment</option><option value="COD">COD Only</option><option value="Prepaid">Prepaid Only</option><option value="Advance">Advance Only</option></select>'+
+  '<button class="btn btn-p" onclick="lgLoad()" style="padding:8px 20px;font-weight:700">🔄 Load Orders</button>'+
   '</div></div>'+
+
+  // ── Summary ──
   '<div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">'+
   '<div class="sc" style="--sc-col:#f97316"><div class="sl">COD</div><div class="sv" id="lgCOD" style="color:#fb923c">—</div></div>'+
   '<div class="sc" style="--sc-col:#34d399"><div class="sl">Prepaid</div><div class="sv" id="lgPRE" style="color:#34d399">—</div></div>'+
   '<div class="sc" style="--sc-col:#818cf8"><div class="sl">Advance</div><div class="sv" id="lgADV" style="color:#818cf8">—</div></div>'+
   '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Total</div><div class="sv" id="lgTOT" style="color:#22d3ee">—</div></div>'+
   '</div>'+
-  '<div class="card"><div class="card-title">📥 Export CSV (India Post Portal)</div>'+
+
+  // ── Step 2: Export CSV ──
+  '<div class="card">'+
+  '<div class="card-title" style="display:flex;align-items:center;gap:8px"><span style="background:linear-gradient(135deg,#ea580c,#f97316);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900">2</span> Export CSV → Upload to India Post Portal</div>'+
+  '<div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:12px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text2)">'+
+  '📋 Export CSV → Open <b>business.indiapost.gov.in</b> → Upload CSV → Portal generates official labels<br>'+
+  '<span style="color:var(--text3);font-size:11px">CSV format matches India Post bulk booking portal exactly</span></div>'+
   '<div style="display:flex;flex-wrap:wrap;gap:10px">'+
-  '<button onclick="lgExportCSV(this)" data-type="all" class="btn btn-g" style="padding:10px 18px;font-size:13px">📊 All CSV</button>'+
-  '<button onclick="lgExportCSV(this)" data-type="cod" class="btn" style="padding:10px 18px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c;font-size:13px">📊 COD CSV</button>'+
-  '<button onclick="lgExportCSV(this)" data-type="prepaid" class="btn" style="padding:10px 18px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;font-size:13px">📊 Prepaid CSV</button>'+
-  '<button onclick="lgExportCSV(this)" data-type="advance" class="btn" style="padding:10px 18px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:#818cf8;font-size:13px">📊 Advance CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="all" class="btn btn-g" style="padding:10px 18px;font-size:13px;font-weight:700">📊 Export All CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="cod" class="btn" style="padding:10px 18px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c;font-size:13px;font-weight:700">📊 COD CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="prepaid" class="btn" style="padding:10px 18px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;font-size:13px;font-weight:700">📊 Prepaid CSV</button>'+
+  '<button onclick="lgExportCSV(this)" data-type="advance" class="btn" style="padding:10px 18px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:#818cf8;font-size:13px;font-weight:700">📊 Advance CSV</button>'+
   '</div>'+
   '<div id="lgExportMsg" style="margin-top:8px;min-height:16px"></div></div>'+
+
+  // ── Step 3: Generate Labels directly ──
+  '<div class="card">'+
+  '<div class="card-title" style="display:flex;align-items:center;gap:8px"><span style="background:linear-gradient(135deg,#ea580c,#f97316);color:white;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900">3</span> Generate Labels Directly (PDF)</div>'+
+  '<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text2)">'+
+  '🏷️ Generate labels directly as PDF — no portal needed. Same format as India Post labels.<br>'+
+  '<span style="color:var(--text3);font-size:11px">Select orders below then click Generate PDF</span></div>'+
+  '<div style="display:flex;flex-wrap:wrap;gap:10px">'+
+  '<button onclick="lgGenerateAllPDF()" class="btn btn-p" style="padding:10px 20px;font-size:13px;font-weight:700">🖨️ Generate All Labels PDF</button>'+
+  '<button onclick="lgGenerateSelectedPDF()" class="btn" style="padding:10px 18px;font-size:13px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#818cf8;font-weight:700">🖨️ Selected Labels PDF</button>'+
+  '</div>'+
+  '<div id="lgPdfMsg" style="margin-top:8px;min-height:16px"></div></div>'+
+
+  // ── Orders Table ──
   '<div class="card">'+
   '<div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
   '<span>Orders <span class="badge bg" id="lgBadge">0</span></span>'+
-  '<div style="display:flex;gap:8px">'+
-  '<button onclick="lgSelectAll(true)" class="btn btn-s" style="padding:5px 12px;font-size:11px">☑ All</button>'+
-  '<button onclick="lgSelectAll(false)" class="btn btn-s" style="padding:5px 12px;font-size:11px">☐ None</button>'+
-  '<button onclick="lgPrintSelected()" class="btn" style="padding:5px 12px;font-size:11px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171">🖨️ Print Selected</button>'+
+  '<div style="display:flex;gap:6px">'+
+  '<button onclick="lgSelectAll(true)" class="btn btn-s" style="padding:5px 10px;font-size:11px">☑ All</button>'+
+  '<button onclick="lgSelectAll(false)" class="btn btn-s" style="padding:5px 10px;font-size:11px">☐ None</button>'+
   '</div></div>'+
-  '<div id="lgWrap"><div class="empty-state"><div>Select session and tap Load</div></div></div>'+
+  '<div id="lgWrap"><div class="empty-state"><div>Tap Load Orders above</div></div></div>'+
   '</div>';
+
   lgLoad();
 }
 
 var _lgOrders=[];
 
-function selectSession(btn){
-  document.querySelectorAll('.sess-btn').forEach(function(b){b.style.background='var(--surface2)';b.style.border='1px solid var(--border)';b.style.color='var(--text2)';});
-  btn.style.background='linear-gradient(135deg,#ea580c,#f97316)';btn.style.border='none';btn.style.color='white';
+function lgSession(btn){
+  document.querySelectorAll('.sess-btn').forEach(function(b){
+    b.style.background='var(--surface2)';b.style.border='1px solid var(--border)';b.style.color='var(--text2)';
+  });
+  btn.style.background='linear-gradient(135deg,#ea580c,#f97316)';
+  btn.style.border='none';btn.style.color='white';
   lgLoad();
 }
 
 function lgLoad(){
   var el=document.getElementById('lgWrap');
-  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading...</div>';
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading orders...</div>';
   var status=document.getElementById('lgStatus')?document.getElementById('lgStatus').value:'Label Generated';
+  var pay=document.getElementById('lgPay')?document.getElementById('lgPay').value:'';
   google.script.run
     .withSuccessHandler(function(orders){
       orders=orders||[];
-      var pay=document.getElementById('lgPay')?document.getElementById('lgPay').value:'';
-      var prod=document.getElementById('lgProd')?document.getElementById('lgProd').value:'';
       if(pay)orders=orders.filter(function(o){return o.paymentType===pay;});
       _lgOrders=orders;
+      // Update stats
       var cod=orders.filter(function(o){return o.paymentType==='COD';}).length;
       var pre=orders.filter(function(o){return o.paymentType==='Prepaid';}).length;
       var adv=orders.filter(function(o){return o.paymentType==='Advance';}).length;
-      var sv=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
-      sv('lgCOD',cod);sv('lgPRE',pre);sv('lgADV',adv);sv('lgTOT',orders.length);
+      ['lgCOD','lgPRE','lgADV','lgTOT'].forEach(function(id,i){
+        var e=document.getElementById(id);if(e)e.textContent=[cod,pre,adv,orders.length][i];
+      });
       var b=document.getElementById('lgBadge');if(b)b.textContent=orders.length;
-      if(!orders.length){if(el)el.innerHTML='<div class="empty-state"><div>No orders found</div></div>';return;}
+      if(!orders.length){
+        if(el)el.innerHTML='<div class="empty-state"><div>No orders found for selected filters</div></div>';
+        return;
+      }
+      // Render table
       var h='<div class="table-scroll"><table><thead><tr>'+
-        '<th><input type="checkbox" id="lgChkAll" onchange="lgSelectAll(this.checked)"></th>'+
-        '<th>#</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th>'+
+        '<th><input type="checkbox" id="lgAll" onchange="lgSelectAll(this.checked)"></th>'+
+        '<th>#</th><th>Customer</th><th>Phone</th><th>Address</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY Number</th><th>Status</th><th>Action</th>'+
         '</tr></thead><tbody>';
       orders.forEach(function(o){
-        var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+        var pClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
         var hasEY=o.eyNumber&&o.eyNumber.length>3;
-        h+='<tr>'+
+        var addr=(o.address||'').substring(0,20)+((o.address||'').length>20?'...':'');
+        h+='<tr data-order-id="'+o.orderId+'">'+
           '<td><input type="checkbox" class="lg-chk" value="'+o.orderId+'"></td>'+
           '<td style="color:#f97316;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
           '<td style="font-weight:700">'+o.customerName+'</td>'+
-          '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
+          '<td style="color:var(--text3);font-size:10px">'+o.phone+'</td>'+
+          '<td style="font-size:10px;color:var(--text2)" title="'+o.address+'">'+addr+'<br>'+o.pincode+'</td>'+
           '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
           '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
-          '<td><span class="badge '+payClr+'">'+o.paymentType+'</span></td>'+
-          '<td style="color:#22d3ee;font-weight:700;font-size:11px" data-field="ey">'+(hasEY?o.eyNumber:'<span style="color:#f59e0b">—</span>')+'</td>'+
+          '<td><span class="badge '+pClr+'">'+o.paymentType+'</span></td>'+
+          '<td style="color:#22d3ee;font-size:11px;font-weight:700" data-field="ey">'+(hasEY?o.eyNumber:'<span style="color:#f59e0b;font-size:10px">Not assigned</span>')+'</td>'+
           '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td>'+
-          '<td class="lga-cell" data-oid2="'+o.orderId+'" data-hasEY="'+(hasEY?'1':'0')+'" style="white-space:nowrap"></td>'+
+          '<td class="lg-act-cell" data-oid3="'+o.orderId+'" data-has-ey="'+(hasEY?'1':'0')+'"></td>'+
           '</tr>';
       });
       h+='</tbody></table></div>';
       if(el){
         el.innerHTML=h;
-        // Set action buttons
-        el.querySelectorAll('.lga-cell').forEach(function(td){
-          var oid=td.getAttribute('data-oid2');
-          var hasEY=td.getAttribute('data-hasEY')==='1';
+        // Attach action buttons
+        el.querySelectorAll('.lg-act-cell').forEach(function(td){
+          var oid=td.getAttribute('data-oid3');
+          var hasEY=td.getAttribute('data-has-ey')==='1';
           if(hasEY){
-            td.innerHTML='<button class="btn btn-g" style="padding:4px 8px;font-size:10px;margin-bottom:2px;display:block;width:100%">🖨️ Print</button>'+
-              '<button class="btn btn-s" style="padding:4px 8px;font-size:10px;display:block;width:100%">🚀 Dispatch</button>';
-            td.querySelectorAll('button')[0].onclick=function(){printLabelUI(oid);};
-            td.querySelectorAll('button')[1].onclick=function(){markDispatchedUI(oid);};
+            var pb=document.createElement('button');
+            pb.className='btn btn-g';pb.style.cssText='padding:4px 8px;font-size:10px;margin-bottom:2px;display:block;width:100%';
+            pb.textContent='🖨️ Print';pb.onclick=function(){printLabelUI(oid);};
+            var db=document.createElement('button');
+            db.className='btn btn-s';db.style.cssText='padding:4px 8px;font-size:10px;display:block;width:100%';
+            db.textContent='🚀 Dispatch';db.onclick=function(){markDispatchedUI(oid);};
+            td.appendChild(pb);td.appendChild(db);
           } else {
-            td.innerHTML='<button class="btn btn-p" style="padding:4px 8px;font-size:10px;display:block;width:100%">EY+Label</button>';
-            td.querySelector('button').onclick=function(){lgAssignEY(oid);};
+            var eb=document.createElement('button');
+            eb.className='btn btn-p';eb.style.cssText='padding:4px 8px;font-size:10px;display:block;width:100%';
+            eb.textContent='EY+Label';eb.onclick=function(){lgAssignEY(oid);};
+            td.appendChild(eb);
           }
         });
       }
     })
-    .withFailureHandler(function(e){if(el)el.innerHTML='<div class="err-msg">Error: '+e.message+'</div>';})
+    .withFailureHandler(function(e){
+      if(el)el.innerHTML='<div class="err-msg">Error: '+e.message+'</div>';
+    })
     .getSalesOrders({status:status});
 }
 
 function lgSelectAll(v){
   document.querySelectorAll('.lg-chk').forEach(function(c){c.checked=v;});
-  var a=document.getElementById('lgChkAll');if(a)a.checked=v;
+  var a=document.getElementById('lgAll');if(a)a.checked=v;
 }
 
 function lgAssignEY(orderId){
   var row=document.querySelector('[data-oid="'+orderId+'"]');
-  if(row){var tr=row.closest('tr');if(tr)tr.style.opacity='0.6';}
-  showToast('Assigning EY...','orange');
+  if(row)row.closest('tr').style.opacity='0.6';
+  showToast('Assigning EY number...','orange');
   google.script.run
     .withSuccessHandler(function(r){
-      if(!r||!r.success){showToast('❌ '+(r&&r.msg||'No EY available - add batch first'),'red');var rr=document.querySelector('[data-oid="'+orderId+'"]');if(rr&&rr.closest)rr.closest('tr').style.opacity='1';return;}
-      showToast('✅ EY: '+r.eyNumber,'green');
+      if(!r||!r.success){
+        showToast('❌ '+(r&&r.msg||'No EY numbers available'),'red');
+        var rr=document.querySelector('[data-oid="'+orderId+'"]');
+        if(rr)rr.closest('tr').style.opacity='1';
+        return;
+      }
+      showToast('✅ EY assigned: '+r.eyNumber,'green');
       _setRowStatus(orderId,'Label Generated');
+      // Update EY cell
       var eyCell=document.querySelector('[data-oid="'+orderId+'"]').closest('tr').querySelector('[data-field="ey"]');
       if(eyCell)eyCell.innerHTML='<span style="color:#22d3ee;font-weight:700">'+r.eyNumber+'</span>';
-      var lga=document.querySelector('[data-oid="'+orderId+'"]').closest('tr').querySelector('.lga-cell');
-      if(lga){
-        lga.innerHTML='<button class="btn btn-g" style="padding:4px 8px;font-size:10px;margin-bottom:2px;display:block;width:100%">🖨️ Print</button>'+
-          '<button class="btn btn-s" style="padding:4px 8px;font-size:10px;display:block;width:100%">🚀 Dispatch</button>';
-        lga.querySelectorAll('button')[0].onclick=function(){printLabelUI(orderId);};
-        lga.querySelectorAll('button')[1].onclick=function(){markDispatchedUI(orderId);};
-        var tr2=lga.closest('tr');if(tr2)tr2.style.opacity='1';
+      // Update action cell
+      var actCell=document.querySelector('[data-oid="'+orderId+'"]').closest('tr').querySelector('.lg-act-cell');
+      if(actCell){
+        actCell.innerHTML='';
+        var pb=document.createElement('button');
+        pb.className='btn btn-g';pb.style.cssText='padding:4px 8px;font-size:10px;margin-bottom:2px;display:block;width:100%';
+        pb.textContent='🖨️ Print';pb.onclick=function(){printLabelUI(orderId);};
+        var db=document.createElement('button');
+        db.className='btn btn-s';db.style.cssText='padding:4px 8px;font-size:10px;display:block;width:100%';
+        db.textContent='🚀 Dispatch';db.onclick=function(){markDispatchedUI(orderId);};
+        actCell.appendChild(pb);actCell.appendChild(db);
+        actCell.closest('tr').style.opacity='1';
       }
       if(r.labelData)showLabelPreview(r.labelData);
     })
-    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .withFailureHandler(function(e){
+      showToast('Error: '+e.message,'red');
+      var rr=document.querySelector('[data-oid="'+orderId+'"]');
+      if(rr)rr.closest('tr').style.opacity='1';
+    })
     .assignEYToOrder(orderId,S.user.empId);
 }
 
 function lgExportCSV(el){
-  var type=typeof el==="string"?el:(el&&el.getAttribute?el.getAttribute("data-type"):"all");
+  var type=typeof el==='string'?el:(el&&el.getAttribute?el.getAttribute('data-type'):'all');
   var orders=_lgOrders.slice();
   if(type==='cod')orders=orders.filter(function(o){return o.paymentType==='COD';});
   else if(type==='prepaid')orders=orders.filter(function(o){return o.paymentType==='Prepaid';});
   else if(type==='advance')orders=orders.filter(function(o){return o.paymentType==='Advance';});
-  if(!orders.length){showToast('No '+type+' orders to export','orange');return;}
-  var PR={50:{l:14,b:9,h:7,w:114},100:{l:14,b:9,h:7,w:192},150:{l:14,b:12,h:9,w:198},200:{l:14,b:12,h:9,w:310},250:{l:14,b:12,h:9,w:398},300:{l:14,b:12,h:9,w:466},400:{l:14,b:12,h:9,w:498},500:{l:14,b:12,h:9,w:810},1000:{l:14,b:12,h:9,w:990}};
-  var rows=[['ArticleNumber','ReceiverName','ReceiverAddress','ReceiverPincode','ReceiverMobile','ReceiverCity','CODAmount','Weight','Length','Breadth','Height','ProductType','ReferenceNumber']];
+  if(!orders.length){showToast('No orders to export — load orders first','orange');return;}
+  
+  // India Post portal CSV format
+  var PR={50:{l:14,b:9,h:7,w:114},100:{l:14,b:9,h:7,w:192},150:{l:14,b:12,h:9,w:198},200:{l:14,b:12,h:9,w:310},250:{l:14,b:12,h:9,w:398},300:{l:14,b:12,h:9,w:466},350:{l:14,b:12,h:9,w:488},400:{l:14,b:12,h:9,w:498},450:{l:14,b:12,h:9,w:540},500:{l:14,b:12,h:9,w:810},1000:{l:14,b:12,h:9,w:990}};
+  
+  var rows=[
+    ['ArticleID','ReceiverName','ReceiverAddress1','ReceiverAddress2','ReceiverCity','ReceiverPincode','ReceiverMobile','Weight','Length','Breadth','Height','ProductType','CODAmount','ReferenceNo','SenderName','SenderAddress','SenderPincode','SenderMobile']
+  ];
+  
   orders.forEach(function(o){
-    var g=parseInt(o.grams)||0;var p=PR[g]||{l:14,b:12,h:9,w:500};
+    var g=parseInt(o.grams)||0;
+    var p=PR[g]||{l:14,b:12,h:9,w:500};
     var cod=o.paymentType==='COD'?o.finalPrice:0;
-    rows.push([o.eyNumber||'','"'+(o.customerName||'').replace(/"/g,"'")+'"','"'+(o.address||'').replace(/"/g,"'")+'"',o.pincode||'',o.phone||'','"'+(o.postOffice||'')+'"',cod,p.w,p.l,p.b,p.h,o.paymentType==='COD'?'COD':'Speed Post','MV'+o.series]);
+    var addrParts=(o.address||'').split(',');
+    var addr1=addrParts.slice(0,2).join(',').trim();
+    var addr2=addrParts.slice(2).join(',').trim();
+    rows.push([
+      o.eyNumber||'',
+      '"'+(o.customerName||'').replace(/"/g,"'")+'"',
+      '"'+addr1.replace(/"/g,"'")+'"',
+      '"'+addr2.replace(/"/g,"'")+'"',
+      '"'+(o.postOffice||o.state||'').replace(/"/g,"'")+'"',
+      o.pincode||'',
+      o.phone||'',
+      p.w,p.l,p.b,p.h,
+      o.paymentType==='COD'?'COD SP':'SP',
+      cod,
+      'MV'+o.series,
+      '"NEEF INTERNATIONAL LLP"',
+      '"THURAKKAL,KONDOTTY,MALAPPURAM"',
+      '673638',
+      '9392529360'
+    ]);
   });
+  
   var csv=rows.map(function(r){return r.join(',');}).join('\r\n');
-  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var bom='\uFEFF'; // BOM for Excel compatibility
+  var blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
   var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');a.href=url;
+  var a=document.createElement('a');
+  a.href=url;
   var now=new Date();
-  a.download='Vesino_'+type.toUpperCase()+'_'+todayStr()+'_'+now.getHours()+'h.csv';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-  showToast('✅ Exported '+orders.length+' orders!','green');
+  var ts=now.getDate()+'_'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+'_'+now.getHours()+'h'+String(now.getMinutes()).padStart(2,'0')+'m';
+  a.download='IndiaPost_'+type.toUpperCase()+'_'+ts+'.csv';
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+  
+  showToast('✅ CSV downloaded: '+orders.length+' orders','green');
   var msg=document.getElementById('lgExportMsg');
-  if(msg)msg.innerHTML='<div class="ok-msg">✅ '+orders.length+' '+type.toUpperCase()+' orders downloaded as CSV</div>';
+  if(msg)msg.innerHTML='<div class="ok-msg" style="margin-top:8px">'+
+    '✅ <b>'+orders.length+'</b> '+type.toUpperCase()+' orders exported<br>'+
+    '<span style="font-size:11px">Upload this CSV to <b>business.indiapost.gov.in</b> → Bulk Booking → Upload CSV</span></div>';
 }
 
-function lgPrintSelected(){
+function lgGenerateAllPDF(){
+  var orders=_lgOrders.filter(function(o){return o.eyNumber&&o.eyNumber.length>3;});
+  if(!orders.length){
+    var msg=document.getElementById('lgPdfMsg');
+    if(msg)msg.innerHTML='<div class="err-msg">No orders with EY numbers. Assign EY numbers first.</div>';
+    return;
+  }
+  _lgBuildBulkPDF(orders.map(function(o){return o.orderId;}));
+}
+
+function lgGenerateSelectedPDF(){
   var ids=Array.from(document.querySelectorAll('.lg-chk:checked')).map(function(c){return c.value;});
   if(!ids.length){showToast('Select orders first','orange');return;}
-  showToast('Loading '+ids.length+' labels...','green');
-  _lgPrintSeq(ids,0);
+  // Filter to only those with EY
+  var withEY=_lgOrders.filter(function(o){return ids.indexOf(o.orderId)!==-1&&o.eyNumber&&o.eyNumber.length>3;});
+  if(!withEY.length){showToast('Selected orders have no EY numbers assigned','orange');return;}
+  _lgBuildBulkPDF(withEY.map(function(o){return o.orderId;}));
 }
 
-function _lgPrintSeq(ids,i){
-  if(i>=ids.length)return;
-  google.script.run.withSuccessHandler(function(d){
-    if(d){showLabelPreview(d);setTimeout(function(){downloadLabelPDF();setTimeout(function(){_lgPrintSeq(ids,i+1);},2000);},600);}
-    else _lgPrintSeq(ids,i+1);
-  }).getLabelData(ids[i]);
+function _lgBuildBulkPDF(orderIds){
+  var msg=document.getElementById('lgPdfMsg');
+  if(msg)msg.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading label data for '+orderIds.length+' orders...</div>';
+  
+  // Fetch all label data
+  var labelDataArr=[];
+  var pending=orderIds.length;
+  
+  orderIds.forEach(function(oid){
+    google.script.run
+      .withSuccessHandler(function(d){
+        if(d)labelDataArr.push(d);
+        pending--;
+        if(pending===0)_lgRenderBulkPDF(labelDataArr,msg);
+      })
+      .withFailureHandler(function(){
+        pending--;
+        if(pending===0)_lgRenderBulkPDF(labelDataArr,msg);
+      })
+      .getLabelData(oid);
+  });
+}
+
+function _lgRenderBulkPDF(labelDataArr,msgEl){
+  if(!labelDataArr.length){
+    if(msgEl)msgEl.innerHTML='<div class="err-msg">No label data found</div>';
+    return;
+  }
+  if(msgEl)msgEl.innerHTML='<div class="loading"><div class="spin-sm"></div> Generating PDF with '+labelDataArr.length+' labels...</div>';
+  
+  // Build all labels HTML in a hidden container
+  var container=document.getElementById('lgBulkRender');
+  if(!container){
+    container=document.createElement('div');
+    container.id='lgBulkRender';
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:white;z-index:-1';
+    document.body.appendChild(container);
+  }
+  
+  // Build labels HTML - 2 per A4 page
+  var labelsHTML='';
+  labelDataArr.forEach(function(d,i){
+    var isCOD=d.paymentType==='COD';
+    var lblHtml='<div class="bulk-label" style="width:780px;border:1.5px solid #000;background:white;color:black;font-family:Arial,sans-serif;font-size:10px;box-sizing:border-box;margin-bottom:4px;page-break-inside:avoid">';
+    if(isCOD)lblHtml+='<div style="border-bottom:1.5px solid #000;padding:6px 10px;text-align:center;font-weight:900;font-size:12px">Cash On Delivery for Rs '+fn(d.codAmount)+' ('+numberToWords(d.codAmount)+' Only)</div>';
+    lblHtml+='<div style="display:flex;min-height:160px">';
+    // Left
+    lblHtml+='<div style="width:290px;flex-shrink:0;padding:8px 10px;border-right:1.5px solid #000">';
+    lblHtml+='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">';
+    lblHtml+='<svg class="blbl-bc-'+i+'" style="width:195px;height:44px"></svg>';
+    lblHtml+='<img src="'+INDIA_POST_LOGO+'" style="width:55px;height:auto;object-fit:contain">';
+    lblHtml+='</div>';
+    lblHtml+='<div style="font-weight:900;font-size:12px;letter-spacing:1px;margin-bottom:4px;background:#f5f5f5;padding:2px 4px;border:1px solid #ccc;text-align:center">'+d.eyNumber+'</div>';
+    lblHtml+='<div style="margin-bottom:3px"><b>Weight:</b> '+d.weight+'g &nbsp; <b>Vol:</b> '+d.volWeight+'g</div>';
+    lblHtml+='<div style="margin-bottom:6px"><b>Ref:</b> '+(d.refNo||'MV'+d.series)+'</div>';
+    lblHtml+='<div style="border-top:1px solid #000;margin-bottom:6px"></div>';
+    lblHtml+='<div><b>From,</b><br>'+d.from.name+','+d.from.city+'<br>'+d.from.phone+'<br>COSTUMER ID:'+d.from.custId+'<br>CONTRACT ID:'+d.from.contractId+' PIN:'+d.from.pin+'</div>';
+    lblHtml+='<div style="margin-top:6px;font-size:10px">🙏 PLEASE CALL CUSTOMER ON DELIVERY 🙏</div>';
+    lblHtml+='</div>';
+    // Right
+    lblHtml+='<div style="flex:1;padding:8px 10px">';
+    if(isCOD)lblHtml+='<div style="text-align:center;font-weight:900;font-size:12px;text-decoration:underline;margin-bottom:8px">CASH ON DELIVERY</div>';
+    lblHtml+='<b>To,</b><br>';
+    lblHtml+='<div style="font-size:13px;font-weight:900;margin:3px 0">'+d.to.name+'</div>';
+    lblHtml+='<div style="line-height:1.6">'+d.to.address+'</div>';
+    lblHtml+='<div style="text-decoration:underline;margin-top:3px">'+d.to.postOffice+'</div>';
+    lblHtml+='<div style="margin-top:6px">'+d.labelText+' 🙏 CALL CUSTOMER ON DELIVERY</div>';
+    lblHtml+='<div style="margin-top:6px;font-weight:900;font-size:12px">'+d.to.postOffice.toUpperCase()+' - PIN: '+d.to.pincode+'</div>';
+    lblHtml+='<div style="margin-top:4px">PH: '+d.to.phone+'</div>';
+    lblHtml+='</div></div></div>';
+    labelsHTML+=lblHtml;
+  });
+  
+  container.innerHTML=labelsHTML;
+  
+  // Render barcodes
+  setTimeout(function(){
+    labelDataArr.forEach(function(d,i){
+      try{JsBarcode('.blbl-bc-'+i,d.eyNumber,{format:'CODE128',width:1.8,height:40,displayValue:false,margin:0});}catch(e){}
+    });
+    
+    // Wait for barcodes then load PDF libs
+    setTimeout(function(){
+      _loadPDFLibsAndRender(container,labelDataArr,msgEl);
+    },500);
+  },200);
+}
+
+function _loadPDFLibsAndRender(container,labelDataArr,msgEl){
+  function loadScript(url,cb){
+    if(document.querySelector('script[src="'+url+'"]')&&window.html2canvas){cb();return;}
+    var s=document.createElement('script');s.src=url;
+    s.onload=function(){cb();};
+    s.onerror=function(){cb(new Error('Load failed'));};
+    document.head.appendChild(s);
+  }
+  
+  function doPDF(){
+    if(msgEl)msgEl.innerHTML='<div class="loading"><div class="spin-sm"></div> Rendering '+labelDataArr.length+' labels to PDF...</div>';
+    
+    html2canvas(container,{
+      scale:1.5,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false
+    }).then(function(canvas){
+      var imgData=canvas.toDataURL('image/jpeg',0.95);
+      var pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+      var pW=pdf.internal.pageSize.getWidth();
+      var pH=pdf.internal.pageSize.getHeight();
+      // Scale to fit A4
+      var canvasW=canvas.width;var canvasH=canvas.height;
+      var ratio=pW/canvasW*96; // 96 dpi
+      var imgH=(canvasH/canvasW)*pW;
+      
+      // Split into pages if very tall
+      var pageH=pH-10;
+      var y=0;
+      while(y<imgH){
+        if(y>0)pdf.addPage();
+        pdf.addImage(imgData,'JPEG',5,5,pW-10,Math.min(pageH,imgH-y),undefined,'FAST',0,-(y/imgH)*canvasH);
+        y+=pageH;
+      }
+      
+      var now=new Date();
+      var ts=now.getDate()+'_'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+'_'+now.getHours()+'h';
+      pdf.save('Vesino_Labels_'+labelDataArr.length+'pcs_'+ts+'.pdf');
+      showToast('✅ PDF with '+labelDataArr.length+' labels downloaded!','green');
+      if(msgEl)msgEl.innerHTML='<div class="ok-msg">✅ PDF downloaded: <b>'+labelDataArr.length+' labels</b> — check your Downloads folder</div>';
+      // Clean up
+      container.innerHTML='';
+    }).catch(function(e){
+      if(msgEl)msgEl.innerHTML='<div class="err-msg">PDF error: '+e.message+'</div>';
+    });
+  }
+  
+  if(window.html2canvas&&window.jspdf){doPDF();}
+  else{
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',function(){
+      loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){
+        doPDF();
+      });
+    });
+  }
 }
 
 function renderEYManage(){var pg=document.getElementById('pg-eyManage');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">EY Number Management</div></div><div class="g2"><div class="card"><div class="card-title">Add EY Batch</div><div class="fcol"><label class="label">EY Numbers (one per line)</label><textarea class="textarea" id="eyBatchInput" rows="8" placeholder="EY067787332IN"></textarea></div><button class="btn btn-p btn-full" onclick="addEYBatchUI()" style="padding:12px">Add Batch</button><div id="eyBatchStatus"></div></div><div class="card"><div class="card-title">EY Stock</div><div id="eyStatsWrap"><div class="loading"><div class="spin-sm"></div></div></div></div></div>';loadEYStats();}

@@ -1535,7 +1535,7 @@ function _lgRenderBulkPDF(labelDataArr,msgEl){
   if(!container){
     container=document.createElement('div');
     container.id='lgBulkRender';
-    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:white;z-index:-1';
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:800px;background:white;z-index:-1;padding:3px';
     document.body.appendChild(container);
   }
   
@@ -1543,33 +1543,81 @@ function _lgRenderBulkPDF(labelDataArr,msgEl){
   var labelsHTML='';
   labelDataArr.forEach(function(d,i){
     var isCOD=d.paymentType==='COD';
-    var lblHtml='<div class="bulk-label" style="width:780px;border:1.5px solid #000;background:white;color:black;font-family:Arial,sans-serif;font-size:10px;box-sizing:border-box;margin-bottom:4px;page-break-inside:avoid">';
-    if(isCOD)lblHtml+='<div style="border-bottom:1.5px solid #000;padding:6px 10px;text-align:center;font-weight:900;font-size:12px">Cash On Delivery for Rs '+fn(d.codAmount)+' ('+numberToWords(d.codAmount)+' Only)</div>';
-    lblHtml+='<div style="display:flex;min-height:160px">';
-    // Left
-    lblHtml+='<div style="width:290px;flex-shrink:0;padding:8px 10px;border-right:1.5px solid #000">';
-    lblHtml+='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">';
-    lblHtml+='<svg class="blbl-bc-'+i+'" style="width:195px;height:44px"></svg>';
-    lblHtml+='<img src="'+INDIA_POST_LOGO+'" style="width:55px;height:auto;object-fit:contain">';
+    // Label: 794px wide x ~520px tall = A5 landscape at 96dpi
+    var lblHtml='<div class="bulk-label" style="width:794px;min-height:520px;border:2px solid #000;background:white;color:black;font-family:Arial,Helvetica,sans-serif;font-size:11px;box-sizing:border-box;overflow:hidden">';
+
+    // ── COD HEADER (only for COD) ──
+    if(isCOD){
+      lblHtml+='<div style="border-bottom:2px solid #000;padding:8px 14px;text-align:center;font-weight:900;font-size:13px;line-height:1.4;background:#fff">';
+      lblHtml+='Cash On Delivery for Rs '+fn(d.codAmount)+' ('+numberToWords(d.codAmount)+' Only)';
+      lblHtml+='</div>';
+    }
+
+    // ── MAIN BODY: Left 340px | Right flex ──
+    lblHtml+='<div style="display:flex;align-items:stretch">';
+
+    // ── LEFT COLUMN ──
+    lblHtml+='<div style="width:340px;min-width:340px;padding:10px 12px;border-right:2px solid #000;box-sizing:border-box">';
+
+    // Barcode row: barcode left, India Post logo right
+    lblHtml+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    lblHtml+='<svg class="blbl-bc-'+i+'" style="width:220px;height:48px"></svg>';
+    lblHtml+='<img src="'+INDIA_POST_LOGO+'" style="width:62px;height:auto;object-fit:contain;margin-left:4px">';
     lblHtml+='</div>';
-    lblHtml+='<div style="font-weight:900;font-size:12px;letter-spacing:1px;margin-bottom:4px;background:#f5f5f5;padding:2px 4px;border:1px solid #ccc;text-align:center">'+d.eyNumber+'</div>';
-    lblHtml+='<div style="margin-bottom:3px"><b>Weight:</b> '+d.weight+'g &nbsp; <b>Vol:</b> '+d.volWeight+'g</div>';
-    lblHtml+='<div style="margin-bottom:6px"><b>Ref:</b> '+(d.refNo||'MV'+d.series)+'</div>';
-    lblHtml+='<div style="border-top:1px solid #000;margin-bottom:6px"></div>';
-    lblHtml+='<div><b>From,</b><br>'+d.from.name+','+d.from.city+'<br>'+d.from.phone+'<br>COSTUMER ID:'+d.from.custId+'<br>CONTRACT ID:'+d.from.contractId+' PIN:'+d.from.pin+'</div>';
-    lblHtml+='<div style="margin-top:6px;font-size:10px">🙏 PLEASE CALL CUSTOMER ON DELIVERY 🙏</div>';
+
+    // EY Number box
+    lblHtml+='<div style="background:#f0f0f0;border:1px solid #999;text-align:center;font-weight:900;font-size:13px;letter-spacing:2px;padding:3px 0;margin-bottom:6px">'+d.eyNumber+'</div>';
+
+    // Weight line
+    lblHtml+='<div style="font-size:11px;margin-bottom:3px"><b>Weight:</b> '+d.weight+' grams &nbsp;&nbsp; <b>Vol Weight:</b> '+d.volWeight+'grams</div>';
+
+    // Ref
+    lblHtml+='<div style="font-size:11px;margin-bottom:8px"><b>Ref:</b> '+(d.refNo||'MV'+d.series)+'</div>';
+
+    // Divider
+    lblHtml+='<div style="border-top:1.5px solid #000;margin-bottom:8px"></div>';
+
+    // From address
+    lblHtml+='<div style="font-size:11px;line-height:1.7">';
+    lblHtml+='<b>From,</b><br>';
+    lblHtml+=d.from.name+','+d.from.city+'<br>';
+    lblHtml+=d.from.phone+'<br>';
+    lblHtml+='COSTUMER ID:'+d.from.custId+'<br>';
+    lblHtml+='CONTRACT ID:'+d.from.contractId+' PIN:'+d.from.pin;
     lblHtml+='</div>';
-    // Right
-    lblHtml+='<div style="flex:1;padding:8px 10px">';
-    if(isCOD)lblHtml+='<div style="text-align:center;font-weight:900;font-size:12px;text-decoration:underline;margin-bottom:8px">CASH ON DELIVERY</div>';
-    lblHtml+='<b>To,</b><br>';
-    lblHtml+='<div style="font-size:13px;font-weight:900;margin:3px 0">'+d.to.name+'</div>';
-    lblHtml+='<div style="line-height:1.6">'+d.to.address+'</div>';
-    lblHtml+='<div style="text-decoration:underline;margin-top:3px">'+d.to.postOffice+'</div>';
-    lblHtml+='<div style="margin-top:6px">'+d.labelText+' 🙏 CALL CUSTOMER ON DELIVERY</div>';
-    lblHtml+='<div style="margin-top:6px;font-weight:900;font-size:12px">'+d.to.postOffice.toUpperCase()+' - PIN: '+d.to.pincode+'</div>';
-    lblHtml+='<div style="margin-top:4px">PH: '+d.to.phone+'</div>';
-    lblHtml+='</div></div></div>';
+
+    // Call customer note
+    lblHtml+='<div style="margin-top:10px;font-size:11px;font-weight:600">🙏 PLEASE CALL CUSTOMER ON DELIVERY 🙏</div>';
+    lblHtml+='</div>'; // end left column
+
+    // ── RIGHT COLUMN ──
+    lblHtml+='<div style="flex:1;padding:10px 14px;box-sizing:border-box;min-width:0">';
+
+    // COD text header (only COD)
+    if(isCOD){
+      lblHtml+='<div style="text-align:center;font-weight:900;font-size:13px;text-decoration:underline;margin-bottom:10px">CASH ON DELIVERY</div>';
+    }
+
+    // To address
+    lblHtml+='<div style="font-size:11px;font-weight:700;margin-bottom:3px">To,</div>';
+    lblHtml+='<div style="font-size:14px;font-weight:900;margin-bottom:5px;word-wrap:break-word">'+d.to.name+'</div>';
+    lblHtml+='<div style="font-size:11px;line-height:1.7;word-wrap:break-word">'+d.to.address+'</div>';
+
+    // Post office underlined
+    lblHtml+='<div style="font-size:11px;text-decoration:underline;margin-top:5px">'+d.to.postOffice+'</div>';
+
+    // Product + call note
+    lblHtml+='<div style="font-size:11px;margin-top:8px;font-weight:600">'+d.labelText+' 🙏 CALL CUSTOMER ON DELIVERY</div>';
+
+    // PIN bold
+    lblHtml+='<div style="font-size:13px;font-weight:900;margin-top:8px">'+d.to.postOffice.toUpperCase()+' - PIN: '+d.to.pincode+'</div>';
+
+    // Phone
+    lblHtml+='<div style="font-size:12px;margin-top:6px">PH: '+d.to.phone+'</div>';
+
+    lblHtml+='</div>'; // end right column
+    lblHtml+='</div>'; // end flex
+    lblHtml+='</div>'; // end label
     labelsHTML+=lblHtml;
   });
   
@@ -1628,7 +1676,9 @@ function _loadPDFLibsAndRender(container,labelDataArr,msgEl){
         useCORS:true,
         allowTaint:true,
         backgroundColor:'#ffffff',
-        logging:false
+        logging:false,
+        width:794,
+        windowWidth:800
       }).then(function(canvas){
         var imgData=canvas.toDataURL('image/jpeg',0.97);
         
@@ -1639,10 +1689,10 @@ function _loadPDFLibsAndRender(container,labelDataArr,msgEl){
           pdf.addPage('a5','landscape');
         }
         
-        var pW=pdf.internal.pageSize.getWidth();
-        var pH=pdf.internal.pageSize.getHeight();
-        // Fill the page with the label (with 4mm margin)
-        pdf.addImage(imgData,'JPEG',4,4,pW-8,pH-8);
+        var pW=pdf.internal.pageSize.getWidth();  // 210mm
+        var pH=pdf.internal.pageSize.getHeight(); // 148mm
+        // Fit label to full A5 page with 3mm margin
+        pdf.addImage(imgData,'JPEG',3,3,pW-6,pH-6,'','FAST');
         
         processed++;
         captureNext(idx+1);

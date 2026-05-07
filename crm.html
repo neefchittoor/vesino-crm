@@ -1598,39 +1598,62 @@ function _loadPDFLibsAndRender(container,labelDataArr,msgEl){
   }
   
   function doPDF(){
-    if(msgEl)msgEl.innerHTML='<div class="loading"><div class="spin-sm"></div> Rendering '+labelDataArr.length+' labels to PDF...</div>';
+    if(msgEl)msgEl.innerHTML='<div class="loading"><div class="spin-sm"></div> Generating PDF — 1 label per page ('+labelDataArr.length+' pages)...</div>';
     
-    html2canvas(container,{
-      scale:1.5,useCORS:true,allowTaint:true,backgroundColor:'#ffffff',logging:false
-    }).then(function(canvas){
-      var imgData=canvas.toDataURL('image/jpeg',0.95);
-      var pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-      var pW=pdf.internal.pageSize.getWidth();
-      var pH=pdf.internal.pageSize.getHeight();
-      // Scale to fit A4
-      var canvasW=canvas.width;var canvasH=canvas.height;
-      var ratio=pW/canvasW*96; // 96 dpi
-      var imgH=(canvasH/canvasW)*pW;
-      
-      // Split into pages if very tall
-      var pageH=pH-10;
-      var y=0;
-      while(y<imgH){
-        if(y>0)pdf.addPage();
-        pdf.addImage(imgData,'JPEG',5,5,pW-10,Math.min(pageH,imgH-y),undefined,'FAST',0,-(y/imgH)*canvasH);
-        y+=pageH;
+    var labelEls=container.querySelectorAll('.bulk-label');
+    if(!labelEls.length){
+      if(msgEl)msgEl.innerHTML='<div class="err-msg">No labels to render</div>';
+      return;
+    }
+    
+    var pdf=null;
+    var processed=0;
+    
+    function captureNext(idx){
+      if(idx>=labelEls.length){
+        // All done - save
+        var now=new Date();
+        var ts=now.getDate()+'_'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+'_'+now.getHours()+'h';
+        pdf.save('Vesino_Labels_'+labelDataArr.length+'pcs_'+ts+'.pdf');
+        showToast('✅ PDF ready: '+labelDataArr.length+' labels','green');
+        if(msgEl)msgEl.innerHTML='<div class="ok-msg">✅ Downloaded <b>'+labelDataArr.length+' label pages</b> — check Downloads folder</div>';
+        container.innerHTML='';
+        return;
       }
       
-      var now=new Date();
-      var ts=now.getDate()+'_'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+'_'+now.getHours()+'h';
-      pdf.save('Vesino_Labels_'+labelDataArr.length+'pcs_'+ts+'.pdf');
-      showToast('✅ PDF with '+labelDataArr.length+' labels downloaded!','green');
-      if(msgEl)msgEl.innerHTML='<div class="ok-msg">✅ PDF downloaded: <b>'+labelDataArr.length+' labels</b> — check your Downloads folder</div>';
-      // Clean up
-      container.innerHTML='';
-    }).catch(function(e){
-      if(msgEl)msgEl.innerHTML='<div class="err-msg">PDF error: '+e.message+'</div>';
-    });
+      if(msgEl)msgEl.innerHTML='<div class="loading"><div class="spin-sm"></div> Processing label '+(idx+1)+' of '+labelEls.length+'...</div>';
+      
+      html2canvas(labelEls[idx],{
+        scale:2,
+        useCORS:true,
+        allowTaint:true,
+        backgroundColor:'#ffffff',
+        logging:false
+      }).then(function(canvas){
+        var imgData=canvas.toDataURL('image/jpeg',0.97);
+        
+        if(!pdf){
+          // First page - A5 landscape for each label
+          pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a5'});
+        } else {
+          pdf.addPage('a5','landscape');
+        }
+        
+        var pW=pdf.internal.pageSize.getWidth();
+        var pH=pdf.internal.pageSize.getHeight();
+        // Fill the page with the label (with 4mm margin)
+        pdf.addImage(imgData,'JPEG',4,4,pW-8,pH-8);
+        
+        processed++;
+        captureNext(idx+1);
+      }).catch(function(e){
+        // Skip failed label and continue
+        processed++;
+        captureNext(idx+1);
+      });
+    }
+    
+    captureNext(0);
   }
   
   if(window.html2canvas&&window.jspdf){doPDF();}

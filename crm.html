@@ -707,7 +707,10 @@ var GAS_MAP = {
   sendMonthlySalaryEmails: function(a){return{};},
   updateSalesOrder: function(a){return a[0]||{};},
   getLabelData: function(a){return{orderId:a[0]};},
-  getNextEmployeeId: function(a){return{};}
+  getNextEmployeeId: function(a){return{};},
+  getEmployees: function(a){return{};},
+  setupTriggers: function(a){return{};},
+  sendDailyReport: function(a){return{};}
 };
 
 function makeChain(sFn, fFn) {
@@ -1219,7 +1222,51 @@ function loadMyOrdersTable(){
   }).getSalesOrders({empId:S.user.empId,status:statusF});
 }
 function confirmOrderUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).confirmOrder(orderId,S.user.name);}
-function rejectOrderUI(orderId){var reason=prompt('Rejection reason:');google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).rejectOrder(orderId,reason||'');}
+function rejectOrderUI(orderId){
+  // Show inline reason box in the row
+  var cell=document.querySelector('[data-oid="'+orderId+'"]');
+  var tr=cell?cell.closest('tr'):null;
+  if(tr){
+    var existing=document.getElementById('rej_box_'+orderId);
+    if(existing){existing.remove();return;}
+    var box=document.createElement('div');
+    box.id='rej_box_'+orderId;
+    box.style.cssText='display:flex;gap:4px;margin-top:5px;align-items:center';
+    var inp=document.createElement('input');
+    inp.type='text';inp.placeholder='Reason (optional)';
+    inp.style.cssText='flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:4px 8px;font-size:11px;color:var(--text);min-width:0';
+    var btn=document.createElement('button');
+    btn.textContent='✗ Reject';
+    btn.style.cssText='background:#ef4444;border:none;border-radius:6px;color:white;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:700;white-space:nowrap';
+    btn.onclick=function(){
+      var reason=inp.value.trim();
+      box.remove();
+      _setRowStatus(orderId,'Rejected');
+      showToast('Order rejected','orange');
+      google.script.run
+        .withSuccessHandler(function(r){
+          if(!r||!r.success){_setRowStatus(orderId,'Pending');showToast('Error: '+(r&&r.msg||'Failed'),'red');}
+          else setTimeout(function(){_removeRow(orderId);},600);
+        })
+        .withFailureHandler(function(e){_setRowStatus(orderId,'Pending');showToast('Error: '+e.message,'red');})
+        .rejectOrder(orderId,reason);
+    };
+    inp.onkeydown=function(e){if(e.key==='Enter')btn.onclick();if(e.key==='Escape')box.remove();};
+    box.appendChild(inp);box.appendChild(btn);
+    var lastTd=tr.querySelector('td:last-child');
+    if(lastTd)lastTd.appendChild(box);
+    inp.focus();
+    return;
+  }
+  // Fallback if no row found
+  var reason=window.prompt('Rejection reason:','');
+  if(reason===null)return;
+  _setRowStatus(orderId,'Rejected');showToast('Order rejected','orange');
+  google.script.run
+    .withSuccessHandler(function(r){if(!r||!r.success){_setRowStatus(orderId,'Pending');showToast('Error','red');}else setTimeout(function(){_removeRow(orderId);},600);})
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .rejectOrder(orderId,reason);
+}
 function assignEYUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success){showToast('✅ EY: '+r.eyNumber,'green');loadSalesOrdersTable();}else{showToast('Error: '+r.msg,'red');}}).assignEYToOrder(orderId,S.user.empId);}
 function markDispatchedUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markDispatched(orderId);}
 function markOFDUI(orderId){google.script.run.withSuccessHandler(function(r){if(r.success)loadSalesOrdersTable();}).markOrderOFD(orderId);}
@@ -1885,53 +1932,80 @@ function handleLeave(reqId,action){
     .reviewLeave(reqId,action,S.user.name||S.user.empId);
 }
 function deleteLeaveUI(reqId){if(!confirm('Delete?'))return;google.script.run.withSuccessHandler(function(r){if(r.success)loadAdminLeaves();}).deleteLeave(reqId);}
-function renderSalary(){var pg=document.getElementById('pg-salary');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Salary</div></div><div class="g2"><div class="card"><div class="card-title">Individual Slip</div><div class="fcol"><label class="label">Employee</label><select class="select" id="salEmpF"></select></div><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="salMonF"></div><button class="btn btn-p btn-full" onclick="calcOneSal()" style="padding:12px;margin-top:6px">Calculate</button><div id="salResult"></div></div><div class="card"><div class="card-title">Payroll</div><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="adminSalMon"></div><button class="btn btn-p btn-full" onclick="loadAllSal()" style="padding:12px;margin-top:6px">Generate</button><div id="allSalResult"></div></div></div>';populateFilters();}
-function calcOneSal(){var empId=document.getElementById('salEmpF')?document.getElementById('salEmpF').value:'';var month=document.getElementById('salMonF')?document.getElementById('salMonF').value:'';if(!empId||!month){var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="err-msg">Select employee and month</div>';return;}var el=document.getElementById('salResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation '+fnr(r.basic)+'</span>':'<span class="perm-badge">Permanent '+fnr(r.basic)+'</span>';var h='<div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:var(--r2);padding:16px;margin-top:12px"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="sal-row"><span>Work Days ('+r.fullDays+'f+'+r.halfDays+'h)</span><span style="color:#818cf8">'+r.workDays+'d</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(99,102,241,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-weight:800;color:#34d399;font-size:16px">'+fnr(r.grossWithTea)+'</span></div></div>';if(el)el.innerHTML=h;}).calcSalary(empId,month,true);}
-function loadAllSal(){var month=document.getElementById('adminSalMon')?document.getElementById('adminSalMon').value:'';if(!month){var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="err-msg">Select month</div>';return;}var el=document.getElementById('allSalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(rows){if(!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No data</div></div>';return;}var total=rows.reduce(function(s,r){return s+r.gross;},0);var h='<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:12px;margin-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">'+rows.length+' employees</span><span style="font-size:18px;font-weight:800;color:#34d399">'+fnr(total)+'</span></div><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>#</th><th>Employee</th><th>Status</th><th>Orders</th><th>Days</th><th>Gross</th></tr></thead><tbody>';rows.forEach(function(r,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+r.name+'</td><td>'+(r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>')+'</td><td>'+fn(r.totalOrders)+'</td><td>'+r.workDays+'d</td><td style="font-weight:800;color:#34d399">'+fnr(r.gross)+'</td></tr>';});h+='</tbody></table></div>';if(el)el.innerHTML=h;}).getAllSalaries(month);}
-function renderCustomers(){var pg=document.getElementById('pg-customers');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Customers</div></div>'+(S.user.isAdmin?'<div class="card"><div class="card-title">Import from Sheet</div><div style="display:flex;gap:8px;flex-wrap:wrap"><select class="select" id="importSheetSel" style="min-width:200px"><option value="">-- Select --</option></select><button class="btn btn-s" onclick="loadSheetList()">Refresh</button><input type="text" class="input" id="importSheetManual" placeholder="Or type name" style="max-width:200px"><button class="btn btn-p" onclick="runBulkImport()">Import</button></div><div id="importStatus"></div></div>':'')+' <div class="fbar"><input type="text" class="fsel" id="custSearch" placeholder="Search..." style="min-width:240px" oninput="loadCustTable()"></div><div id="custTableWrap"><div class="loading"><div class="spin-sm"></div></div></div>';if(S.user.isAdmin)loadSheetList();loadCustTable();}
-function loadSheetList(){google.script.run.withSuccessHandler(function(sheets){var el=document.getElementById('importSheetSel');if(!el)return;el.innerHTML='<option value="">-- Select --</option>'+sheets.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');}).getAvailableSheets();}
-function runBulkImport(){var sel=document.getElementById('importSheetSel').value;var manual=document.getElementById('importSheetManual').value.trim();var sheetName=manual||sel;var st=document.getElementById('importStatus');if(!sheetName){if(st)st.innerHTML='<div class="err-msg">Select a sheet</div>';return;}if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Importing...</div>';google.script.run.withSuccessHandler(function(r){if(r.success){if(st)st.innerHTML='<div class="ok-msg">Imported '+fn(r.added)+'!</div>';loadCustTable();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).bulkImportCustomers(sheetName);}
-function loadCustTable(){var search=document.getElementById('custSearch')?document.getElementById('custSearch').value:'';var el=document.getElementById('custTableWrap');google.script.run.withSuccessHandler(function(data){if(!data.length){if(el)el.innerHTML='<div class="empty-state"><div>No customers</div></div>';return;}var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Pincode</th><th>State</th><th>Orders</th><th>Returns</th></tr></thead><tbody>';data.forEach(function(c,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+c.name+'</td><td style="color:#818cf8">'+c.phone+'</td><td>'+c.pincode+'</td><td>'+c.state+'</td><td style="color:#34d399">'+c.totalOrders+'</td><td style="color:#f87171">'+c.returns+'</td></tr>';});h+='</tbody></table></div></div>';if(el)el.innerHTML=h;}).getCustomers(search);}
-function renderReports(){var pg=document.getElementById('pg-reports');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Reports</div></div><div class="g2"><div class="card"><div class="card-title">Daily Report</div><button class="btn btn-p btn-full" onclick="sendReport()" style="padding:12px">Send Now</button>'+(S.user.isAdmin?'<button class="btn btn-s btn-full" onclick="setupTriggersUI()" style="padding:10px;margin-top:8px">Setup Triggers</button>':'')+'<div id="reportStatus"></div></div><div class="card"><div class="card-title">Reminders</div><button class="btn btn-s btn-full" onclick="sendReminderUI(false)" style="padding:10px">Send All</button><button class="btn btn-s btn-full" onclick="sendReminderUI(true)" style="padding:10px;margin-top:8px">Send Missing</button><div id="reminderStatus"></div></div></div><div class="g2"><div class="card"><div class="card-title">Export</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn btn-s" onclick="exportDataLocal(\'orders\')">Orders CSV</button><button class="btn btn-s" onclick="exportDataLocal(\'salary\')">Salary CSV</button><button class="btn btn-s" onclick="exportDataLocal(\'employees\')">Employees CSV</button>'+(S.user.isAdmin?'<button class="btn btn-g" onclick="sendSalaryEmails()">Salary Emails</button>':'')+'</div><div id="salEmailStatus"></div></div><div class="card"><div class="card-title">Alerts</div><button class="btn btn-d btn-full" onclick="checkAlertsUI()" style="padding:10px">Run Alerts</button><div id="alertStatus"></div></div></div>';}
-function sendReport(){var el=document.getElementById('reportStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(el)el.innerHTML=r.success?'<div class="ok-msg">Sent!</div>':'<div class="err-msg">Failed</div>';}).sendDailyReport();}
-function setupTriggersUI(){var el=document.getElementById('reportStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(){if(el)el.innerHTML='<div class="ok-msg">Triggers set!</div>';}).setupTriggers();}
-function sendReminderUI(m){var el=document.getElementById('reminderStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(el)el.innerHTML='<div class="ok-msg">Sent to '+r.sent+'!</div>';}).sendReminder(m);}
-function checkAlertsUI(){var el=document.getElementById('alertStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(el)el.innerHTML=r.alerts&&r.alerts.length?'<div class="err-msg">'+r.alerts.length+' alerts!</div>':'<div class="ok-msg">All healthy!</div>';}).checkAlerts();}
-function sendSalaryEmails(){var el=document.getElementById('salEmailStatus');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(el)el.innerHTML='<div class="ok-msg">Sent '+r.sent+' slips!</div>';}).sendMonthlySalaryEmails();}
-function exportDataLocal(type){google.script.run.withSuccessHandler(function(r){if(!r||!r.rows.length){showToast('No data','orange');return;}var csv=[r.headers.join(',')];r.rows.forEach(function(row){csv.push(row.map(function(c){var s=String(c===null||c===undefined?'':c);if(s.includes(','))s='"'+s+'"';return s;}).join(','));});var blob=new Blob([csv.join('\n')],{type:'text/csv'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=r.filename+'.csv';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);}).exportData(type,{});}
-function renderAdmin(){var pg=document.getElementById('pg-admin');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Administration</div></div><div class="g2"><div class="card"><div class="card-title">Add Employee</div><div class="frow"><div class="fcol"><label class="label">ID *</label><input type="text" class="input" id="aeId"></div><div class="fcol"><label class="label">Name *</label><input type="text" class="input" id="aeName"></div></div><div class="frow"><div class="fcol"><label class="label">Email *</label><input type="email" class="input" id="aeEmail"></div><div class="fcol"><label class="label">Phone</label><input type="text" class="input" id="aePhone"></div></div><div class="frow"><div class="fcol"><label class="label">Password *</label><input type="text" class="input" id="aePass"></div><div class="fcol"><label class="label">Role *</label><select class="select" id="aeRole"><option>Sales</option><option>Confirmation</option><option>DataEntry</option><option>Admin</option></select></div></div><div class="frow"><div class="fcol"><label class="label">Brand</label><select class="select" id="aeBrand"><option value="">Select</option><option>Manveera</option></select></div><div class="fcol"><label class="label">Join Date *</label><input type="date" class="input" id="aeJoin"><div style="font-size:10px;color:#fcd34d;margin-top:3px">30 days = Probation Rs 12k</div></div></div><button id="addEmpBtn" class="btn btn-p btn-full" onclick="submitAddEmp()" style="padding:12px">Add Employee</button><div id="addEmpStatus"></div></div><div class="card"><div class="card-title">Employees</div>'+(function(){var empMap=S.data?S.data.empMap||{}:{};var emps=Object.entries(empMap).filter(function(e){return e[1].role!=='Admin';});emps.sort(function(a,b){var na=parseInt((a[0].match(/[0-9]+/)||[0])[0])||0;var nb=parseInt((b[0].match(/[0-9]+/)||[0])[0])||0;return na-nb;});if(!emps.length)return '<div class="empty-state"><div>No employees</div></div>';var h='<div class="table-scroll"><table><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Brand</th><th>Status</th><th>Del</th></tr></thead><tbody>';emps.forEach(function(e){var id=e[0];var emp=e[1];h+='<tr><td style="color:var(--text3);font-size:11px">'+id+'</td><td style="font-weight:700">'+emp.name+'</td><td><span class="badge '+(emp.role==='Sales'?'bi':emp.role==='Confirmation'?'by':'bc')+'">'+emp.role+'</span></td><td>'+emp.brand+'</td><td>'+(isProbLocal(emp.joinDate)?'<span class="prob-badge">Prob</span>':'<span class="perm-badge">Perm</span>')+'</td><td><button onclick="deleteEmpUI(\''+id+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Del</button></td></tr>';});h+='</tbody></table></div>';return h;})()+'</div></div>';}
-function submitAddEmp(){var fields=['aeId','aeName','aeEmail','aePass','aeRole'];for(var i=0;i<fields.length;i++){var el=document.getElementById(fields[i]);if(!el||!el.value.trim()){var st=document.getElementById('addEmpStatus');if(st)st.innerHTML='<div class="err-msg">Fill required fields</div>';return;}}var jd=document.getElementById('aeJoin').value;var fmtJoin='';if(jd){var p=jd.split('-');fmtJoin=p[2]+'-'+p[1]+'-'+p[0];}var data={empId:document.getElementById('aeId').value.trim().toUpperCase(),name:document.getElementById('aeName').value.trim(),email:document.getElementById('aeEmail').value.trim(),phone:document.getElementById('aePhone').value.trim(),password:document.getElementById('aePass').value.trim(),role:document.getElementById('aeRole').value,brand:document.getElementById('aeBrand').value,joinDate:fmtJoin};var btn=document.getElementById('addEmpBtn');if(btn){btn.disabled=true;btn.textContent='Adding...';}google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Add Employee';}var st=document.getElementById('addEmpStatus');if(r.success){if(st)st.innerHTML='<div class="ok-msg">'+r.msg+'</div>';fields.forEach(function(f){var el=document.getElementById(f);if(el)el.value='';});refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+r.msg+'</div>';}}).addEmployee(data);}
-function deleteEmpUI(empId){if(!confirm('Delete '+empId+'?'))return;google.script.run.withSuccessHandler(function(r){if(r.success)refreshData();else showToast('Error: '+r.msg,'red');}).deleteEmployee(empId);}
-function renderMyDash(){
-  var pg=document.getElementById('pg-myDash');if(!pg||!S.data)return;
-  var myEntries=(S.data.entries||[]).filter(function(r){return r.empId===S.user.empId;});
-  var retMap=S.data.retMap||{};var myRet=retMap[S.user.empId]||0;
-  var leaveInfo=S.data.leaveInfo||{used:0,remaining:5,max:5};
-  var td=todayStr();var todayE=myEntries.find(function(r){return r.date===td;});
-  var allOrd=myEntries.reduce(function(s,r){return s+r.totalOrders;},0);
-  var enqLog=S.data.enqLog||[];
-  var myEnqLog=enqLog.filter(function(r){return r.empId===S.user.empId;});
-  var allEnq=myEnqLog.reduce(function(s,r){return s+r.enqCount;},0);
-  var overallConv=allEnq>0?(allOrd/allEnq*100).toFixed(1):0;
-  var netConv=allEnq>0?((allOrd-myRet)/allEnq*100).toFixed(1):0;
-  var t={fD:0,hD:0,aD:0};myEntries.forEach(function(r){if(r.att===1)t.fD++;else if(r.att===0.5)t.hD++;else t.aD++;});
-  var ini=S.user.name.split(' ').filter(Boolean);var avatar=ini.length>=2?ini[0][0]+ini[1][0]:S.user.name.slice(0,2).toUpperCase();
-  var isMnv=S.user.brand==='Manveera';
-  var notifs=S.data.notifications||[];
-  var ofdNotifs=notifs.filter(function(n){return n.type==='OFD';});
-  var ofdBanner='';
-  if(ofdNotifs.length){
-    ofdBanner='<div class="ofd-banner"><div class="ofd-banner-title">&#x1F69A; '+ofdNotifs.length+' Order'+(ofdNotifs.length>1?'s':'')+' Out for Delivery <button onclick="markAllSeenUI()" class="btn btn-s" style="padding:4px 10px;font-size:10px;margin-left:auto">Mark All Seen</button></div>';
-    ofdNotifs.forEach(function(n){
-      ofdBanner+='<div class="ofd-item"><div class="ofd-item-top"><div><div class="ofd-cust">'+n.customerName+'</div><div class="ofd-ey">'+n.eyNumber+' &#x1F4DE; '+n.phone+'</div></div><div class="ofd-amount">'+fnr(n.amount)+' COD</div></div><div class="ofd-update-row"><span style="font-size:10px;color:var(--text3)">Update:</span><button onclick="submitCallUpdate(\''+n.orderId+'\',\''+n.eyNumber+'\',\'Will Receive\',\''+n.customerName+'\',\''+n.phone+'\',\''+n.notifId+'\')" class="ofd-resp-btn ofd-btn-will">Will Receive</button><button onclick="submitCallUpdate(\''+n.orderId+'\',\''+n.eyNumber+'\',\'Not Available\',\''+n.customerName+'\',\''+n.phone+'\',\''+n.notifId+'\')" class="ofd-resp-btn ofd-btn-na">Not Available</button><button onclick="submitCallUpdate(\''+n.orderId+'\',\''+n.eyNumber+'\',\'Wants to Cancel\',\''+n.customerName+'\',\''+n.phone+'\',\''+n.notifId+'\')" class="ofd-resp-btn ofd-btn-cancel">Cancel</button><button onclick="submitCallUpdate(\''+n.orderId+'\',\''+n.eyNumber+'\',\'Already Received\',\''+n.customerName+'\',\''+n.phone+'\',\''+n.notifId+'\')" class="ofd-resp-btn ofd-btn-done">Already Received</button></div></div>';
-    });
-    ofdBanner+='</div>';
-  }
-  pg.innerHTML='<div class="profile-hdr"><div class="p-avatar">'+avatar+'</div><div><div class="p-name">'+S.user.name+'</div><div style="font-size:12px;opacity:.6">'+S.user.empId+' - '+S.user.brand+'</div><div class="p-tags"><span class="p-tag">'+S.user.brand+'</span><span class="p-tag">Leaves: '+leaveInfo.used+'/'+leaveInfo.max+'</span></div></div></div>'+ofdBanner+(leaveInfo.isExceeded?'<div class="err-msg" style="margin-bottom:14px">Out of leaves!</div>':'')+(!todayE?'<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><span style="color:#fcd34d;font-weight:700">Not submitted today!</span><button class="btn btn-p" onclick="switchPage(\'orders\')" style="padding:7px 14px;font-size:12px">Submit Now</button></div>':'')+'<div class="card"><div class="card-title">Mark Attendance</div><div style="display:flex;gap:10px"><button class="att-btn" id="attBtnP" onclick="markAtt(\'Present\')">Present</button><button class="att-btn" id="attBtnH" onclick="markAtt(\'Half Day\')">Half Day</button><button class="att-btn" id="attBtnA" onclick="markAtt(\'Absent\')">Absent</button></div><div id="attMarkResult"></div></div><div class="g3" style="margin-bottom:18px"><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Conversion</div><div style="font-size:24px;font-weight:800;color:'+convColor(overallConv)+'">'+overallConv+'%</div></div><div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Net Conv</div><div style="font-size:24px;font-weight:800;color:'+convColor(netConv)+'">'+netConv+'%</div></div><div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:14px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:4px">Enquiries</div><div style="font-size:24px;font-weight:800;color:#34d399">'+fn(allEnq)+'</div></div></div><div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total Orders</div><div class="sv">'+fn(allOrd)+'</div></div><div class="sc" style="--sc-col:#10b981"><div class="sl">Present Days</div><div class="sv">'+t.fD+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Returns</div><div class="sv" style="color:#f87171">'+myRet+'</div></div><div class="sc" style="--sc-col:#f59e0b"><div class="sl">Leaves Left</div><div class="sv" style="color:#fcd34d">'+leaveInfo.remaining+'</div></div></div><div class="table-wrap"><div class="table-hdr"><div class="table-title">My Daily Records</div><div class="table-badge">'+myEntries.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Date</th>'+'<th>Lehya 50</th><th>Lehya 100</th><th>Lehya 200</th><th>Lehya 500</th><th>Astra</th><th>COD</th><th>Prepaid</th>'+'<th>Total</th><th>Att</th></tr></thead><tbody>'+myEntries.slice(0,30).map(function(r){return'<tr><td style="color:var(--text3)">'+r.date+'</td>'+'<td style="color:#fb923c">'+r.gl50+'</td><td style="color:#fb923c">'+r.gl100+'</td><td style="color:#fb923c">'+r.gl200+'</td><td style="color:#fb923c">'+r.gl500+'</td><td style="color:#60a5fa">'+r.astraBottles+'</td><td style="color:#34d399">'+(r.codOrders||0)+'</td><td style="color:#a78bfa">'+(r.prepaidOrders||0)+'</td>'+'<td style="font-weight:800">'+r.totalOrders+'</td><td><span style="color:'+attColor(r.att)+'">'+attLabel(r.att)+'</span></td></tr>';}).join('')+'</tbody></table></div></div>';
+function renderSalary(){
+  var pg=document.getElementById('pg-salary');if(!pg)return;
+  var today=new Date();
+  var curMonth=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+  pg.innerHTML=
+    '<div class="pg-hdr"><div class="pg-title">💰 Salary Management</div></div>'+
+    '<div class="card">'+
+    '<div class="card-title">Calculate Salaries</div>'+
+    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'+
+    '<div class="form-group" style="flex:1;min-width:140px"><label class="label">Month</label>'+
+    '<input type="month" class="input" id="salMonth" value="'+curMonth+'"></div>'+
+    '<div class="form-group" style="flex:1;min-width:120px"><label class="label">Employee</label>'+
+    '<input type="text" class="input" id="salEmpId" placeholder="All or EmpID"></div>'+
+    '<button class="btn btn-p" onclick="loadSalaries()" style="padding:9px 20px;font-weight:700">📊 Calculate</button>'+
+    '<button class="btn btn-g" onclick="sendSalaryEmails()" style="padding:9px 16px">📧 Email All</button>'+
+    '</div>'+
+    '<div id="salStatus" style="min-height:14px;margin-top:6px"></div>'+
+    '</div>'+
+    '<div id="salResults"><div class="empty-state"><div>Select month and click Calculate</div></div></div>';
 }
-function submitCallUpdate(orderId,eyNumber,response,customerName,phone,notifId){var data={orderId:orderId,eyNumber:eyNumber,empId:S.user.empId,empName:S.user.name,called:'Yes',response:response,customerName:customerName,phone:phone,notes:''};google.script.run.withSuccessHandler(function(r){if(r.success){if(notifId)google.script.run.markNotificationSeen(notifId);refreshData();}}).submitDeliveryUpdate(data);}
-function markAllSeenUI(){google.script.run.withSuccessHandler(function(){refreshData();}).markAllNotificationsSeen(S.user.empId);}
-function markAtt(status){['attBtnP','attBtnH','attBtnA'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='att-btn';});var map={'Present':'attBtnP','Half Day':'attBtnH','Absent':'attBtnA'};var cls={'Present':'selected-p','Half Day':'selected-h','Absent':'selected-a'};var el=document.getElementById(map[status]);if(el)el.className='att-btn '+cls[status];var res=document.getElementById('attMarkResult');if(res)res.innerHTML='<div class="loading"><div class="spin-sm"></div> Saving...</div>';google.script.run.withSuccessHandler(function(r){if(res){if(r.success)res.innerHTML='<div class="ok-msg">Marked: '+status+'</div>';else res.innerHTML='<div class="err-msg">'+r.msg+'</div>';}refreshData();}).submitAttendance({date:todayStr(),empId:S.user.empId,empName:S.user.name,role:S.user.role,brand:S.user.brand,status:status,notes:''});}
+
+function loadSalaries(){
+  var month=document.getElementById('salMonth')?document.getElementById('salMonth').value:'';
+  var empId=document.getElementById('salEmpId')?document.getElementById('salEmpId').value.trim():'';
+  if(!month){showToast('Select a month first','orange');return;}
+  var el=document.getElementById('salResults');
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Calculating salaries for '+month+'...</div>';
+  google.script.run
+    .withSuccessHandler(function(rows){
+      if(!rows||!rows.length){if(el)el.innerHTML='<div class="empty-state"><div>No salary data found</div></div>';return;}
+      var totalPay=rows.reduce(function(s,r){return s+r.netSalary;},0);
+      var h='<div class="card"><div class="card-title" style="display:flex;justify-content:space-between">'+
+        '<span>Salary Report — '+month+'</span>'+
+        '<span style="color:#34d399;font-weight:900">Total: '+fnr(totalPay)+'</span></div>'+
+        '<div class="table-scroll"><table><thead><tr>'+
+        '<th>Emp ID</th><th>Name</th><th>Role</th><th>Base</th>'+
+        '<th>COD Orders</th><th>Prepaid Orders</th><th>Incentive</th>'+
+        '<th>Leaves</th><th>Deductions</th><th>Net Salary</th>'+
+        '</tr></thead><tbody>';
+      rows.forEach(function(r){
+        h+='<tr>'+
+          '<td style="color:#fb923c;font-weight:700">'+r.empId+'</td>'+
+          '<td style="font-weight:700">'+r.name+'</td>'+
+          '<td><span class="badge bc">'+r.role+'</span></td>'+
+          '<td>'+fnr(r.baseSalary)+'</td>'+
+          '<td style="text-align:center">'+r.codOrders+'</td>'+
+          '<td style="text-align:center">'+r.prepaidOrders+'</td>'+
+          '<td style="color:#34d399;font-weight:700">+'+fnr(r.incentive)+'</td>'+
+          '<td style="text-align:center;color:'+(r.leaves>0?'#f59e0b':'var(--text3)')+'">'+r.leaves+'</td>'+
+          '<td style="color:#f87171">-'+fnr(r.deductions)+'</td>'+
+          '<td style="font-weight:900;font-size:14px;color:#34d399">'+fnr(r.netSalary)+'</td>'+
+          '</tr>';
+      });
+      h+='</tbody></table></div></div>';
+      if(el)el.innerHTML=h;
+    })
+    .withFailureHandler(function(e){
+      if(el)el.innerHTML='<div class="err-msg">Error: '+e.message+'</div>';
+    })
+    .getAllSalaries(month,empId||null);
+}
+
+function sendSalaryEmails(){
+  var month=document.getElementById('salMonth')?document.getElementById('salMonth').value:'';
+  if(!month){showToast('Select month first','orange');return;}
+  if(!confirm('Send salary emails to all employees for '+month+'?'))return;
+  showToast('Sending emails...','orange');
+  google.script.run
+    .withSuccessHandler(function(r){showToast(r.success?'✅ Emails sent!':'❌ '+r.msg,r.success?'green':'red');})
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .sendMonthlySalaryEmails(month);
+}
+
+
 function renderMySalary(){var pg=document.getElementById('pg-mySalary');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">My Salary</div></div><div class="card"><div class="card-title">Calculate</div><div class="frow"><div class="fcol"><label class="label">Month</label><input type="month" class="input" id="myMon" value="'+getMonthStr()+'"></div></div><button class="btn btn-p" onclick="calcMySal()" style="padding:12px">Calculate</button><div id="mySalResult" style="margin-top:12px"></div></div>';}
 function calcMySal(){var month=document.getElementById('myMon')?document.getElementById('myMon').value:'';if(!month)return;var el=document.getElementById('mySalResult');if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(r){if(!r){if(el)el.innerHTML='<div class="err-msg">No data</div>';return;}var statusBadge=r.onProbation?'<span class="prob-badge">Probation</span>':'<span class="perm-badge">Permanent</span>';var h='<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r2);padding:20px"><div style="display:flex;justify-content:space-between;margin-bottom:14px"><span style="font-weight:800">'+r.name+'</span>'+statusBadge+'</div><div class="g4" style="margin-bottom:14px"><div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#34d399">'+r.fullDays+'</div><div style="font-size:9px;color:var(--text3)">FULL</div></div><div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#fcd34d">'+r.halfDays+'</div><div style="font-size:9px;color:var(--text3)">HALF</div></div><div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#f87171">'+r.absentDays+'</div><div style="font-size:9px;color:var(--text3)">ABSENT</div></div><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:#818cf8">'+fn(r.totalOrders)+'</div><div style="font-size:9px;color:var(--text3)">ORDERS</div></div></div><div class="sal-row"><span>Base</span><span>'+fnr(r.basic)+'</span></div>'+(r.extraB?'<div class="sal-row"><span style="color:#34d399">Bonus</span><span style="color:#34d399">+'+fnr(r.extraB)+'</span></div>':'')+(r.attDed?'<div class="sal-row"><span style="color:#f87171">Att. Ded.</span><span style="color:#f87171">-'+fnr(r.attDed)+'</span></div>':'')+'<div class="sal-row"><span style="color:#34d399">COD '+r.cod+' x Rs 13</span><span style="color:#34d399">+'+fnr(r.codInc)+'</span></div><div class="sal-row"><span style="color:#34d399">Prepaid '+r.prepaid+' x Rs 20</span><span style="color:#34d399">+'+fnr(r.preInc)+'</span></div>'+(r.retDed?'<div class="sal-row"><span style="color:#f87171">Returns</span><span style="color:#f87171">-'+fnr(r.retDed)+'</span></div>':'')+'<div style="border-top:2px solid rgba(16,185,129,.3);margin-top:10px;padding-top:12px;display:flex;justify-content:space-between"><span style="font-weight:800">Gross</span><span class="sal-total" style="color:#34d399">'+fnr(r.gross)+'</span></div><div style="margin-top:8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:var(--r);padding:10px;display:flex;justify-content:space-between"><span style="color:#fcd34d">Tea Rs 30 x '+r.workDays+'d</span><span style="color:#fcd34d">+'+fnr(r.tea)+'</span></div><div style="margin-top:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:var(--r);padding:12px;display:flex;justify-content:space-between"><span style="font-weight:800;color:#34d399">Total with Tea</span><span style="font-size:22px;font-weight:800;color:#34d399">'+fnr(r.grossWithTea)+'</span></div></div>';if(el)el.innerHTML=h;}).calcSalary(S.user.empId,month,true);}
 function renderMyLeave(){var pg=document.getElementById('pg-myLeave');if(!pg)return;var leaveInfo=S.data?S.data.leaveInfo||{used:0,remaining:5,max:5}:{used:0,remaining:5,max:5};pg.innerHTML='<div class="pg-hdr"><div class="pg-title">My Leave</div></div><div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);border-radius:var(--r2);padding:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div><div style="font-weight:700;color:#818cf8">Balance</div><div style="font-size:11px;color:var(--text3)">Max '+leaveInfo.max+' days/month</div></div><div style="text-align:center"><div style="font-size:28px;font-weight:800;color:'+(leaveInfo.isExceeded?'#f87171':'#34d399')+'">'+leaveInfo.remaining+'</div><div style="font-size:10px;color:var(--text3)">Remaining</div></div></div><div class="g2"><div class="card"><div class="card-title">Apply for Leave</div><div class="fcol"><label class="label">Leave Type</label><select class="select" id="lvType"><option>Sick Leave</option><option>Personal Leave</option><option>Emergency Leave</option><option>Casual Leave</option></select></div><div class="frow"><div class="fcol"><label class="label">From</label><input type="date" id="lvFrom" class="input" oninput="calcLvDays()"></div><div class="fcol"><label class="label">To</label><input type="date" id="lvTo" class="input" oninput="calcLvDays()"></div></div><div id="lvDays" style="display:none;background:rgba(99,102,241,.1);border-radius:var(--r);padding:10px;text-align:center;margin-bottom:12px"><span style="font-size:20px;font-weight:800;color:#818cf8" id="lvDaysCount">0</span><span style="color:#818cf8"> days</span></div><div class="fcol"><label class="label">Reason</label><textarea class="textarea" id="lvReason" rows="3"></textarea></div><button class="btn btn-p btn-full" onclick="submitLeave()" style="padding:12px">Submit</button><div id="lvStatus"></div></div><div class="card"><div class="card-title">History <button class="btn btn-s" onclick="loadMyLeaveHist()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myLeaveHist"><div class="empty-state"><div>Click Load</div></div></div></div></div>';}
@@ -2501,6 +2575,272 @@ function showLabelPreview(d){
 }
 function closeLabelPreview(){var a=document.getElementById('labelPreviewCard');if(a)a.remove();}
 function triggerPrint(){if(window._currentLabelData)downloadLabelPDF();}
+
+function renderAdmin(){
+  var pg=document.getElementById('pg-admin');if(!pg)return;
+  var curMonth=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+  pg.innerHTML=
+    '<div class="pg-hdr"><div class="pg-title">⚙️ Administration</div></div>'+
+    '<div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
+    '👥 Employees <button class="btn btn-p" onclick="toggleAddEmpForm()" style="padding:7px 14px;font-size:12px">+ Add Employee</button></div>'+
+    '<div id="addEmpForm" style="display:none;background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:14px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div class="form-group"><label class="label">Emp ID *</label><input class="input" id="newEmpId" placeholder="MV401"></div>'+
+    '<div class="form-group"><label class="label">Name *</label><input class="input" id="newEmpName" placeholder="Full name"></div>'+
+    '<div class="form-group"><label class="label">Role</label><select class="select" id="newEmpRole">'+
+    '<option>Sales</option><option>Confirmation</option><option>DataEntry</option><option>Admin</option></select></div>'+
+    '<div class="form-group"><label class="label">Password *</label><input class="input" id="newEmpPass" type="password" placeholder="Password"></div>'+
+    '<div class="form-group"><label class="label">Phone</label><input class="input" id="newEmpPhone" placeholder="Phone"></div>'+
+    '<div class="form-group"><label class="label">Join Date</label><input class="input" id="newEmpJoin" type="date"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px">'+
+    '<button class="btn btn-p" onclick="addEmpUI()" style="padding:9px 20px">💾 Add Employee</button>'+
+    '<button class="btn" onclick="toggleAddEmpForm()" style="padding:9px 14px;background:var(--surface2)">Cancel</button>'+
+    '</div><div id="addEmpStatus" style="margin-top:6px;min-height:14px"></div></div>'+
+    '<div id="empListWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div></div>'+
+    '<div class="card"><div class="card-title">🔧 System Actions</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px">'+
+    '<button class="btn btn-g" onclick="setupTriggersUI()" style="padding:10px 18px">⚡ Setup Triggers</button>'+
+    '<button class="btn" onclick="sendDailyReportUI()" style="padding:10px 18px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);color:#22d3ee">📊 Daily Report</button>'+
+    '</div><div id="sysStatus" style="margin-top:8px;min-height:14px"></div></div>';
+  loadEmpList();
+}
+
+function toggleAddEmpForm(){
+  var f=document.getElementById('addEmpForm');
+  if(f)f.style.display=f.style.display==='none'?'block':'none';
+}
+
+function loadEmpList(){
+  var el=document.getElementById('empListWrap');if(!el)return;
+  google.script.run
+    .withSuccessHandler(function(emps){
+      emps=emps||[];
+      if(!emps.length){el.innerHTML='<div class="empty-state"><div>No employees</div></div>';return;}
+      var h='<div class="table-scroll"><table><thead><tr>'+
+        '<th>ID</th><th>Name</th><th>Role</th><th>Phone</th><th>Join Date</th><th>Action</th>'+
+        '</tr></thead><tbody>';
+      emps.forEach(function(e){
+        var rC=e.role==='Admin'?'by':e.role==='Sales'?'bg':e.role==='Confirmation'?'bc':'bw';
+        h+='<tr><td style="color:#fb923c;font-weight:700">'+e.empId+'</td>'+
+          '<td style="font-weight:700">'+e.name+'</td>'+
+          '<td><span class="badge '+rC+'">'+e.role+'</span></td>'+
+          '<td style="font-size:11px;color:var(--text3)">'+e.phone+'</td>'+
+          '<td style="font-size:11px">'+e.joinDate+'</td>'+
+          '<td><button class="btn btn-d del-emp-btn" style="padding:4px 10px;font-size:10px" data-eid="'+e.empId+'" data-ename="'+e.name+'">Delete</button></td></tr>';
+      });
+      h+='</tbody></table></div>';
+      el.innerHTML=h;
+      // Event delegation for delete buttons
+      el.querySelectorAll('.del-emp-btn').forEach(function(btn){
+        btn.onclick=function(){deleteEmpUI(this.getAttribute('data-eid'),this.getAttribute('data-ename'));};
+      });
+    })
+    .withFailureHandler(function(e){el.innerHTML='<div class="err-msg">'+e.message+'</div>';})
+    .getEmployees();
+}
+
+function addEmpUI(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+  var st=document.getElementById('addEmpStatus');
+  var data={empId:g('newEmpId'),name:g('newEmpName'),role:g('newEmpRole'),password:g('newEmpPass'),phone:g('newEmpPhone'),joinDate:g('newEmpJoin')};
+  if(!data.empId||!data.name||!data.password){if(st)st.innerHTML='<div class="err-msg">Fill Emp ID, Name and Password</div>';return;}
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Adding...</div>';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.success){
+        if(st)st.innerHTML='<div class="ok-msg">✅ '+data.name+' added!</div>';
+        showToast('Employee added','green');
+        ['newEmpId','newEmpName','newEmpPass','newEmpPhone','newEmpJoin'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+        loadEmpList();
+      }else{if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg||'Failed')+'</div>';}
+    })
+    .withFailureHandler(function(e){if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';})
+    .addEmployee(data);
+}
+
+function deleteEmpUI(empId,name){
+  if(!confirm('Delete '+name+' ('+empId+')? This cannot be undone.'))return;
+  showToast('Deleting...','orange');
+  google.script.run
+    .withSuccessHandler(function(r){
+      showToast(r&&r.success?'✅ Deleted!':'❌ Failed',r&&r.success?'green':'red');
+      if(r&&r.success)loadEmpList();
+    })
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .deleteEmployee(empId);
+}
+
+function setupTriggersUI(){
+  var st=document.getElementById('sysStatus');
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Setting up...</div>';
+  google.script.run
+    .withSuccessHandler(function(){if(st)st.innerHTML='<div class="ok-msg">✅ Triggers configured!</div>';showToast('Triggers set up','green');})
+    .withFailureHandler(function(e){if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';})
+    .setupTriggers();
+}
+
+function sendDailyReportUI(){
+  var st=document.getElementById('sysStatus');
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Sending...</div>';
+  google.script.run
+    .withSuccessHandler(function(){if(st)st.innerHTML='<div class="ok-msg">✅ Report sent!</div>';showToast('Daily report sent','green');})
+    .withFailureHandler(function(e){if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';})
+    .sendDailyReport();
+}
+
+
+function renderCustomers(){
+  var pg=document.getElementById('pg-customers');if(!pg)return;
+  pg.innerHTML='<div class="pg-hdr"><div class="pg-title">👥 Customer Database</div></div>'+
+    '<div class="card"><div class="card-title">Search Customers</div>'+
+    '<div style="display:flex;gap:10px;margin-bottom:10px">'+
+    '<input class="input" id="custSearch" placeholder="Name, phone or pincode..." style="flex:1" oninput="filterCustomers()">'+
+    '<button class="btn btn-p" onclick="loadCustomers()" style="padding:8px 16px">🔄 Load</button>'+
+    '</div></div>'+
+    '<div id="custWrap"><div class="empty-state"><div>Tap Load to see customers</div></div></div>';
+}
+
+function loadCustomers(){
+  var el=document.getElementById('custWrap');
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';
+  google.script.run
+    .withSuccessHandler(function(custs){
+      custs=custs||[];
+      window._allCustomers=custs;
+      renderCustomerList(custs);
+    })
+    .withFailureHandler(function(e){if(el)el.innerHTML='<div class="err-msg">'+e.message+'</div>';})
+    .getCustomers();
+}
+
+function filterCustomers(){
+  var q=(document.getElementById('custSearch')||{}).value||'';
+  q=q.toLowerCase();
+  var all=window._allCustomers||[];
+  var filtered=q?all.filter(function(c){return (c.name||'').toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.pincode||'').includes(q);}):all;
+  renderCustomerList(filtered);
+}
+
+function renderCustomerList(custs){
+  var el=document.getElementById('custWrap');if(!el)return;
+  if(!custs.length){el.innerHTML='<div class="empty-state"><div>No customers found</div></div>';return;}
+  var h='<div class="card"><div class="card-title">'+custs.length+' Customers</div>'+
+    '<div class="table-scroll"><table><thead><tr>'+
+    '<th>Name</th><th>Phone</th><th>Address</th><th>Orders</th><th>Total Value</th>'+
+    '</tr></thead><tbody>';
+  custs.forEach(function(c){
+    h+='<tr>'+
+      '<td style="font-weight:700">'+c.name+'</td>'+
+      '<td style="color:var(--text3);font-size:11px">'+c.phone+'</td>'+
+      '<td style="font-size:10px;color:var(--text2)">'+c.pincode+' '+c.state+'</td>'+
+      '<td style="text-align:center;font-weight:700;color:#fb923c">'+c.orderCount+'</td>'+
+      '<td style="color:#34d399;font-weight:700">'+fnr(c.totalValue)+'</td>'+
+      '</tr>';
+  });
+  h+='</tbody></table></div></div>';
+  el.innerHTML=h;
+}
+
+function renderReports(){
+  var pg=document.getElementById('pg-reports');if(!pg)return;
+  var today=new Date();
+  var curMonth=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+  pg.innerHTML='<div class="pg-hdr"><div class="pg-title">📊 Reports</div></div>'+
+    '<div class="card"><div class="card-title">Generate Reports</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'+
+    '<div class="form-group"><label class="label">Month</label><input type="month" class="input" id="repMonth" value="'+curMonth+'"></div>'+
+    '<div class="form-group"><label class="label">Report Type</label>'+
+    '<select class="select" id="repType">'+
+    '<option value="sales">Sales Performance</option>'+
+    '<option value="orders">Orders Summary</option>'+
+    '<option value="salary">Salary Report</option>'+
+    '</select></div>'+
+    '<button class="btn btn-p" onclick="generateReport()" style="padding:9px 20px;font-weight:700">📊 Generate</button>'+
+    '<button class="btn btn-g" onclick="exportReportCSV()" style="padding:9px 16px">📥 Export CSV</button>'+
+    '</div></div>'+
+    '<div id="repResults"><div class="empty-state"><div>Select options and click Generate</div></div></div>';
+}
+
+function generateReport(){
+  var month=document.getElementById('repMonth')?document.getElementById('repMonth').value:'';
+  var type=document.getElementById('repType')?document.getElementById('repType').value:'sales';
+  if(!month){showToast('Select a month','orange');return;}
+  var el=document.getElementById('repResults');
+  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Generating '+type+' report for '+month+'...</div>';
+  google.script.run
+    .withSuccessHandler(function(data){
+      if(!data||!data.rows||!data.rows.length){
+        if(el)el.innerHTML='<div class="empty-state"><div>No data for '+month+'</div></div>';return;
+      }
+      window._reportData=data;
+      var h='<div class="card"><div class="card-title" style="display:flex;justify-content:space-between">'+
+        '<span>'+data.title+' — '+month+'</span>'+
+        '</div>'+
+        '<div class="table-scroll"><table><thead><tr>'+
+        data.headers.map(function(h){return '<th>'+h+'</th>';}).join('')+
+        '</tr></thead><tbody>'+
+        data.rows.map(function(row){
+          return '<tr>'+row.map(function(cell,i){
+            return '<td'+(i===0?' style="font-weight:700"':'')+'>'+(typeof cell==='number'&&i>1?fnr(cell):cell)+'</td>';
+          }).join('')+'</tr>';
+        }).join('')+
+        '</tbody></table></div></div>';
+      if(el)el.innerHTML=h;
+    })
+    .withFailureHandler(function(e){if(el)el.innerHTML='<div class="err-msg">'+e.message+'</div>';})
+    .getEmployeePerformance(month);
+}
+
+function exportReportCSV(){
+  var data=window._reportData;
+  if(!data||!data.rows){showToast('Generate report first','orange');return;}
+  var csv=[data.headers.join(',')].concat(data.rows.map(function(r){return r.join(',');})).join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='Report_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  showToast('Report exported','green');
+}
+
+function renderMyDash(){
+  var pg=document.getElementById('pg-myDash');if(!pg||!S.data)return;
+  var myEntries=(S.data.entries||[]).filter(function(r){return r.empId===S.user.empId;});
+  var today=new Date().toISOString().slice(0,10).split('-').reverse().join('-');
+  var todayE=myEntries.find(function(r){return r.date===today||r.date===new Date().toISOString().slice(0,10);});
+  var leaveInfo=S.data.leaveInfo||{used:0,remaining:5,max:5};
+  var orders=S.data.myOrders||[];
+  var pending=orders.filter(function(o){return o.status==='Pending';}).length;
+  var confirmed=orders.filter(function(o){return o.status==='Confirmed';});
+  var avatar=S.user.name?S.user.name.charAt(0).toUpperCase():'?';
+
+  pg.innerHTML=
+    '<div class="profile-hdr"><div class="p-avatar">'+avatar+'</div>'+
+    '<div><div class="p-name">'+S.user.name+'</div>'+
+    '<div style="font-size:12px;opacity:.6">'+S.user.empId+' - '+S.user.brand+'</div>'+
+    '<div class="p-tags"><span class="p-tag">'+S.user.brand+'</span>'+
+    '<span class="p-tag">Leaves: '+leaveInfo.used+'/'+leaveInfo.max+'</span></div></div></div>'+
+    // Stats
+    '<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">'+
+    '<div class="sc" style="--sc-col:#f97316"><div class="sl">Pending</div><div class="sv" style="color:#fb923c">'+pending+'</div></div>'+
+    '<div class="sc" style="--sc-col:#34d399"><div class="sl">Confirmed</div><div class="sv" style="color:#34d399">'+confirmed.length+'</div></div>'+
+    '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Total Orders</div><div class="sv" style="color:#22d3ee">'+orders.length+'</div></div>'+
+    '</div>'+
+    // Today entry
+    (todayE?
+      '<div class="card"><div class="card-title">✅ Today Entry Submitted</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+
+      '<div style="text-align:center"><div style="font-size:11px;color:var(--text3)">Lehya Orders</div><div style="font-size:20px;font-weight:900;color:#fb923c">'+(todayE.totalOrders||0)+'</div></div>'+
+      '<div style="text-align:center"><div style="font-size:11px;color:var(--text3)">Enquiries</div><div style="font-size:20px;font-weight:900;color:#22d3ee">'+(todayE.totalEnquiries||0)+'</div></div>'+
+      '<div style="text-align:center"><div style="font-size:11px;color:var(--text3)">COD / Prepaid</div><div style="font-size:20px;font-weight:900;color:#34d399">'+(todayE.cod||0)+' / '+(todayE.prepaid||0)+'</div></div>'+
+      '</div></div>':
+      '<div class="card" style="border-color:rgba(249,115,22,.3)"><div class="card-title" style="color:#fb923c">⚠️ Daily Entry Not Submitted</div>'+
+      '<p style="font-size:13px;color:var(--text2);margin:0">Go to Daily Orders to submit today entry</p></div>')+
+    // My Orders
+    '<div class="card"><div class="card-title" style="display:flex;justify-content:space-between">'+
+    'My Recent Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:5px 12px;font-size:11px">Load</button></div>'+
+    '<div id="myOrdersWrap"><div class="empty-state"><div>Tap Load to see your orders</div></div></div></div>';
+}
 
 window.onload = function() {
   var sv=localStorage.getItem('vesino_api_url')||'';

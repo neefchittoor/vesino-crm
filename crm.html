@@ -1039,165 +1039,305 @@ function renderDashboard(){
 }
 function renderSalesOrders(){var pg=document.getElementById('pg-salesOrders');if(!pg)return;if(S.user.role==='Sales'&&!S.user.isAdmin){renderSalesOrderForm(pg);return;}var title=S.user.isAdmin?'All Orders':S.user.role==='Confirmation'?'Orders to Confirm':'Orders Queue';pg.innerHTML='<div class="pg-hdr"><div class="pg-title">'+title+'</div></div><div class="fbar"><span class="fl">Status:</span><select class="fsel" id="soStatusF" onchange="loadSalesOrdersTable()"><option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option><option>Label Generated</option><option>Dispatched</option><option>Out for Delivery</option><option>Delivered</option><option>RTO</option></select><span class="fl">Date:</span><input type="text" class="fsel" id="soDateF" placeholder="dd-mm-yyyy" style="min-width:120px"><button class="btn btn-p" onclick="loadSalesOrdersTable()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'soStatusF\').value=\'\';document.getElementById(\'soDateF\').value=\'\';loadSalesOrdersTable()">Reset</button></div><div id="soTableWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div>';loadSalesOrdersTable();}
 function loadSalesOrdersTable(){var statusF=document.getElementById('soStatusF')?document.getElementById('soStatusF').value:'';var dateF=document.getElementById('soDateF')?document.getElementById('soDateF').value:'';var el=document.getElementById('soTableWrap');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(orders){if(!orders.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>No orders found</div></div>';return;}var canConfirm=S.user.isAdmin||S.user.role==='Confirmation';var canLabel=S.user.isAdmin||S.user.role==='DataEntry';var h='<div class="table-wrap"><div class="table-hdr"><div class="table-title">Orders</div><div class="table-badge">'+orders.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Series</th><th>Date</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th></tr></thead><tbody>';orders.forEach(function(o){var actions='';if(canConfirm&&o.status==='Pending'){actions+='<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:4px">Confirm</button><button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Reject</button>';}if(canLabel&&o.status==='Confirmed'){actions+='<button onclick="assignEYUI(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">Assign EY</button>';}if(canLabel&&o.status==='Label Generated'){actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Dispatch</button>';}if((S.user.isAdmin||S.user.role==='DataEntry')&&(o.status==='Dispatched'||o.status==='Out for Delivery')){actions+='<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-right:4px">OFD</button><button onclick="markDeliveredUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Delivered</button>';}if(S.user.isAdmin){actions+='<button onclick="deleteSalesOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-top:4px">Delete</button>';}h+='<tr><td style="font-weight:700;color:#818cf8">#'+o.series+'</td><td>'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td style="color:#818cf8">'+o.phone+'</td><td>'+o.grams+'gm</td><td style="font-weight:800;color:#34d399">'+fnr(o.finalPrice)+(o.discount>0?'<div style="font-size:9px;color:#f87171">-'+fnr(o.discount)+'</div>':'')+'</td><td><span class="badge '+(o.paymentType==='COD'?'bc':'by')+'">'+o.paymentType+'</span>'+(o.advanceRequired==='Yes'?'<span class="badge br" style="margin-left:4px;font-size:9px">ADV</span>':'')+'</td><td style="font-size:10px;color:#22d3ee">'+(o.eyNumber||'-')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td style="white-space:nowrap">'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({status:statusF,date:dateF});}
-function renderSalesOrderForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">New Sales Order</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Customer Name *</label><input type="text" class="input" id="soName" placeholder="Customer name"></div><div class="fcol"><label class="label">Phone *</label><input type="text" class="input" id="soPhone" placeholder="Phone number"></div></div><div id="soDupWarn"></div><div class="fcol"><label class="label">Address *</label><textarea class="textarea" id="soAddress" rows="2" placeholder="Full delivery address"></textarea></div><div class="frow"><div class="fcol"><label class="label">Pincode *</label><input type="text" class="input" id="soPincode" placeholder="6-digit pincode" oninput="if(this.value.length===6)lookupPincodeUI()"><div id="pincodeStatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div><div class="fcol"><label class="label">Post Office *</label><select class="select" id="soPostOffice"><option value="">-- Fetch by Pincode --</option></select><div style="margin-top:6px"><input type="text" class="input" id="manualPO" placeholder="Or type post office name manually" oninput="syncManualPO(this.value)"></div></div></div><input type="hidden" id="soState"><div class="frow"><div class="fcol"><label class="label">Grams *</label><select class="select" id="soGrams" onchange="updatePricing()"><option value="">-- Select --</option>'+Object.keys(PRICES).map(function(g){return '<option value="'+g+'">'+(g=='1000'?'1kg':g+'gm')+'</option>';}).join('')+'</select></div><div class="fcol"><label class="label">Bottle Option</label><select class="select" id="soMultiple" onchange="updatePricing()"><option value="0">Direct Size</option><option value="1">Multiple Bottles (discount)</option></select></div></div><div id="soPriceCard"></div><div class="frow"><div class="fcol"><label class="label">Payment Type</label><select class="select" id="soPayType" onchange="toggleScreenshot()"><option value="COD">COD</option><option value="Prepaid">Prepaid</option><option value="Advance">Advance</option></select></div></div><div id="soScreenshotWrap" style="display:none"><div class="fcol"><label class="label">Payment Screenshot URL *</label><input type="text" class="input" id="soScreenshot" placeholder="Paste screenshot URL"></div></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="soNotes" placeholder="Optional"></div><button class="btn btn-p btn-full" id="soSubmitBtn" onclick="submitSalesOrderUI()" style="padding:13px">Submit Order</button><div id="soStatus"></div></div><div class="card"><div class="card-title">My Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:6px 12px;font-size:11px">Load</button></div><div id="myOrdersWrap"><div class="empty-state"><div>Click Load</div></div></div></div>';}
-function lookupPincodeUI(){
-  var pin=document.getElementById('soPincode').value.trim();
-  if(pin.length!==6||isNaN(Number(pin)))return;
-  var st=document.getElementById('pincodeStatus');
-  var sel=document.getElementById('soPostOffice');
-  var stateEl=document.getElementById('soState');
-  if(st){st.textContent='🔍 Fetching...';st.style.color='var(--text3)';}
-  if(sel)sel.innerHTML='<option value="">Loading...</option>';
+function renderSalesOrderForm(){
+  var pg=document.getElementById('pg-newOrder');if(!pg)return;
+  var today=new Date().toISOString().slice(0,10);
 
-  // Try browser fetch first (postalpincode.in), fallback to GAS
-  fetch('https://api.postalpincode.in/pincode/'+pin)
-    .then(function(r){return r.json();})
-    .then(function(data){
-      if(data&&data[0]&&data[0].Status==='Success'&&data[0].PostOffice&&data[0].PostOffice.length){
-        var offices=data[0].PostOffice;
-        var first=offices[0];
-        if(stateEl)stateEl.value=first.State||'';
-        if(st){st.textContent='✅ '+first.District+', '+first.State;st.style.color='#34d399';}
-        if(sel){
-          sel.innerHTML='<option value="">-- Select Post Office --</option>'+
-            offices.map(function(o){return '<option value="'+o.Name+'">'+o.Name+(o.BranchType?' ('+o.BranchType+')':'')+'</option>';}).join('');
-          if(offices.length===1)sel.value=offices[0].Name;
-        }
-      } else {
-        throw new Error('Not found in browser API');
-      }
-    })
-    .catch(function(){
-      // Fallback to GAS (works reliably server-side)
-      if(st){st.textContent='🔍 Searching...';st.style.color='var(--text3)';}
-      google.script.run
-        .withSuccessHandler(function(r){
-          if(!r||!r.success){
-            if(st){st.textContent='📍 Type post office manually';st.style.color='#f59e0b';}
-            if(sel)sel.innerHTML='<option value="">-- Type manually below --</option>';
-            var mpo=document.getElementById('manualPO');
-            if(mpo)mpo.style.display='block';
-            return;
-          }
-          if(stateEl)stateEl.value=r.state||'';
-          if(st){st.textContent='✅ '+r.district+', '+r.state;st.style.color='#34d399';}
-          if(sel){
-            sel.innerHTML='<option value="">-- Select Post Office --</option>'+
-              (r.offices||[]).map(function(o){return '<option value="'+o.name+'">'+o.name+(o.branchType?' ('+o.branchType+')':'')+'</option>';}).join('');
-            if(r.offices&&r.offices.length===1)sel.value=r.offices[0].name;
-          }
-        })
-        .withFailureHandler(function(e){
-          if(st){st.textContent='⚠️ API error — type post office manually';st.style.color='#f87171';}
-          if(sel)sel.innerHTML='<option value="">-- Type manually below --</option>';
-          var mpo=document.getElementById('manualPO');
-          if(mpo)mpo.style.display='block';
-        })
-        .lookupPincode(pin);
-    });
+  pg.innerHTML='<div class="pg-hdr"><div class="pg-title">📝 New Sales Order</div></div>'+
+    '<div class="card"><div class="card-title">Customer & Order Details</div>'+
+    // Employee ID (auto-filled)
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Employee ID</label>'+
+    '<input class="input" id="soEmpId" value="'+S.user.empId+'" readonly style="background:rgba(249,115,22,.08);color:#fb923c;font-weight:700"></div>'+
+    '<div class="fcol"><label class="label">Order Date</label>'+
+    '<input type="date" class="input" id="soDate" value="'+today+'"></div>'+
+    '</div>'+
+    // Customer info
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Customer Name *</label>'+
+    '<input class="input" id="soName" placeholder="Full name"></div>'+
+    '<div class="fcol"><label class="label">Phone *</label>'+
+    '<input class="input" id="soPhone" placeholder="10-digit mobile" maxlength="10"></div>'+
+    '</div>'+
+    '<div class="frow">'+
+    '<div class="fcol" style="flex:2"><label class="label">Address *</label>'+
+    '<textarea class="input" id="soAddress" rows="2" placeholder="Door no, street, area"></textarea></div>'+
+    '</div>'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Pincode *</label>'+
+    '<div style="display:flex;gap:5px"><input class="input" id="soPincode" placeholder="6 digits" maxlength="6" oninput="if(this.value.length===6)lookupSOPincode()"><button class="btn btn-s" onclick="lookupSOPincode()" style="padding:6px 10px">🔍</button></div></div>'+
+    '<div class="fcol"><label class="label">Post Office</label>'+
+    '<input class="input" id="soPostOffice" placeholder="Auto-filled"></div>'+
+    '<div class="fcol"><label class="label">State</label>'+
+    '<input class="input" id="soState" placeholder="Auto-filled"></div>'+
+    '</div>'+
+    '<div id="soPincodeStatus" style="font-size:11px;min-height:14px;margin-bottom:10px"></div>'+
+    '</div>'+
+
+    // Product Selection
+    '<div class="card"><div class="card-title">🌿 Product & Combo</div>'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Product Type</label>'+
+    '<select class="select" id="soProductType" onchange="updateProductView()">'+
+    '<option value="single">Single Bottle</option>'+
+    '<option value="combo">Multi-Bottle Combo (Discount)</option>'+
+    '</select></div>'+
+    '</div>'+
+
+    // Single bottle view
+    '<div id="singleView">'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Grams</label>'+
+    '<select class="select" id="soGrams" onchange="updateSinglePrice()">'+
+    '<option value="50">50g</option><option value="100">100g</option>'+
+    '<option value="150">150g</option><option value="200" selected>200g</option>'+
+    '<option value="250">250g</option><option value="300">300g</option>'+
+    '<option value="400">400g</option><option value="500">500g</option>'+
+    '<option value="1000">1kg</option>'+
+    '</select></div>'+
+    '<div class="fcol"><label class="label">MRP</label>'+
+    '<input class="input" id="soMRP" readonly style="color:#f87171;text-decoration:line-through"></div>'+
+    '<div class="fcol"><label class="label">Selling Price</label>'+
+    '<input class="input" id="soSellPrice" type="number" placeholder="Auto"></div>'+
+    '</div>'+
+    '</div>'+
+
+    // Combo view (hidden by default)
+    '<div id="comboView" style="display:none">'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Combo Pack</label>'+
+    '<select class="select" id="soCombo" onchange="updateComboPrice()">'+
+    '<option value="">Select combo...</option>'+
+    '<option value="50+50">50g + 50g (Save ₹78)</option>'+
+    '<option value="50+50+50">50g + 50g + 50g (Save ₹117)</option>'+
+    '<option value="100+100">100g + 100g (Save ₹70)</option>'+
+    '<option value="200+200">200g + 200g (Save ₹220) — ₹200 advance</option>'+
+    '</select></div>'+
+    '<div class="fcol"><label class="label">Selling Price</label>'+
+    '<input class="input" id="soComboPrice" readonly style="color:#34d399;font-weight:900"></div>'+
+    '</div>'+
+    '<div id="comboNote" style="background:rgba(99,102,241,.08);border-radius:8px;padding:10px;font-size:12px;color:var(--text2);margin-bottom:10px"></div>'+
+    '</div>'+
+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Discount</label>'+
+    '<input class="input" id="soDiscount" type="number" placeholder="0" oninput="updateFinalPrice()"></div>'+
+    '<div class="fcol"><label class="label">Final Price</label>'+
+    '<input class="input" id="soFinalPrice" type="number" style="font-weight:900;color:#34d399;font-size:16px"></div>'+
+    '</div>'+
+    '</div>'+
+
+    // Payment
+    '<div class="card"><div class="card-title">💳 Payment</div>'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label">Payment Type</label>'+
+    '<select class="select" id="soPayment" onchange="updatePaymentView()">'+
+    '<option value="COD">COD (Cash on Delivery)</option>'+
+    '<option value="Prepaid">Prepaid (Full Advance)</option>'+
+    '<option value="Advance">Advance (Partial Advance)</option>'+
+    '</select></div>'+
+    '<div class="fcol"><label class="label">Source</label>'+
+    '<select class="select" id="soSource">'+
+    '<option>Meta Ads</option><option>WhatsApp</option><option>Phone</option>'+
+    '<option>Influencer</option><option>YouTube</option><option>Other</option>'+
+    '</select></div>'+
+    '</div>'+
+
+    // Prepaid/Advance specific - Screenshot Serial No
+    '<div id="paymentExtra" style="display:none">'+
+    '<div class="frow">'+
+    '<div class="fcol"><label class="label" id="advLabel">Advance Amount</label>'+
+    '<input class="input" id="soAdvance" type="number" placeholder="0"></div>'+
+    '<div class="fcol"><label class="label">📸 Screenshot Serial No</label>'+
+    '<input class="input" id="soScreenshotSno" placeholder="e.g. SS-2024-001"></div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text3);margin-top:4px">Save the payment screenshot with this serial number for tracking</div>'+
+    '</div>'+
+
+    '<div class="frow"><div class="fcol"><label class="label">Notes</label>'+
+    '<textarea class="input" id="soNotes" rows="2" placeholder="Any special instructions..."></textarea></div></div>'+
+    '</div>'+
+
+    // Submit
+    '<div style="display:flex;gap:10px;margin-top:14px">'+
+    '<button class="btn btn-p" onclick="submitSalesOrderUI()" style="flex:1;padding:14px;font-size:15px;font-weight:700">💾 Submit Order</button>'+
+    '<button class="btn" onclick="resetOrderForm()" style="padding:14px 20px;background:var(--surface2)">🔄 Reset</button>'+
+    '</div>'+
+    '<div id="soStatus" style="margin-top:8px;min-height:14px"></div>';
+
+  updateProductView();
+  updateSinglePrice();
 }
-function updatePricing(){var grams=parseInt(document.getElementById('soGrams').value)||0;var useMultiple=document.getElementById('soMultiple').value==='1';var el=document.getElementById('soPriceCard');if(!el)return;if(!grams){el.innerHTML='';return;}var p=calcPricing(grams,useMultiple);if(!p){el.innerHTML='';return;}var discountLine=p.discount>0?'<div class="price-row"><span style="color:#f87171">Discount ('+(p.boxes.indexOf(200)!==-1?'15%':'20%')+')</span><span class="discount-tag">-'+fnr(p.discount)+'</span></div>':'';var payType=document.getElementById('soPayType')?document.getElementById('soPayType').value:'COD';
-    var codLine=payType==='COD'?'<div class="price-row"><span style="color:#f87171">COD Charge</span><span style="color:#f87171">+'+fnr(p.codCharge)+'</span></div>':'';
-    var prepaidLine=payType==='Prepaid'?'<div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:6px 10px;margin-top:6px;font-size:11px;color:#34d399">✅ Prepaid — No COD charge. Incentive: ₹20</div>':'';
-    el.innerHTML='<div class="price-card"><div class="price-row"><span>Selling Price</span><span>'+fnr(p.selling)+'</span></div>'+discountLine+codLine+'<div class="price-row" style="border-top:1px solid rgba(249,115,22,.3)"><span style="font-weight:800">Final Amount</span><span class="price-total">'+fnr(p.finalPrice)+'</span></div><div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text3)"><span>Boxes: <b style="color:var(--text)">'+p.labelText+'</b></span><span>Weight: <b style="color:var(--text)">'+p.weight+'g</b></span></div>'+prepaidLine+'</div>';}
-function toggleScreenshot(){var val=document.getElementById('soPayType').value;var wrap=document.getElementById('soScreenshotWrap');if(wrap)wrap.style.display=val==='Advance'?'block':'none';}
 
-function editOrderUI(orderId){
-  // Load order data and pre-fill form
-  var el=document.getElementById('myOrdersWrap');
-  if(el)el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading order...</div>';
-  google.script.run
-    .withSuccessHandler(function(orders){
-      var o=orders&&orders.find(function(x){return x.orderId===orderId;});
-      if(!o){showToast('Order not found','red');return;}
-      // Scroll to form top
-      var pg=document.getElementById('pg-salesOrders');
-      if(pg)pg.scrollIntoView({behavior:'smooth'});
-      // Pre-fill form
-      var setV=function(id,v){var el=document.getElementById(id);if(el)el.value=v||'';};
-      setV('soName',o.customerName);setV('soPhone',o.phone);setV('soAddress',o.address);
-      setV('soPincode',o.pincode);setV('soNotes',o.notes);
-      setV('soPayType',o.paymentType||'COD');toggleScreenshot();
-      // Set grams
-      var gramsVal=o.grams==='1kg'?1000:parseInt(o.grams)||0;
-      var grEl=document.getElementById('soGrams');
-      if(grEl)grEl.value=gramsVal;
-      updatePricing();
-      // Store editing order ID
-      var submitBtn=document.getElementById('soSubmitBtn');
-      if(submitBtn){
-        submitBtn.textContent='Update Order';
-        submitBtn.setAttribute('data-edit-id',orderId);
-        submitBtn.setAttribute('data-edit-series',o.series);
-      }
-      // Show edit banner
-      var st=document.getElementById('soStatus');
-      if(st)st.innerHTML='<div class="ok-msg" style="background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.3);color:#fb923c">&#9998; Editing Order #'+o.series+' — Make changes and tap Update Order <button onclick="cancelEditOrder()" style="background:none;border:none;color:#f87171;cursor:pointer;margin-left:8px">&#x2715; Cancel</button></div>';
-      // Scroll to top of form
-      window.scrollTo({top:0,behavior:'smooth'});
-    })
-    .getSalesOrders({empId:S.user.empId});
+function updateProductView(){
+  var type=document.getElementById('soProductType').value;
+  document.getElementById('singleView').style.display=type==='single'?'block':'none';
+  document.getElementById('comboView').style.display=type==='combo'?'block':'none';
+  if(type==='combo')updateComboPrice();
+  else updateSinglePrice();
 }
 
-function cancelEditOrder(){
-  var submitBtn=document.getElementById('soSubmitBtn');
-  if(submitBtn){submitBtn.textContent='Submit Order';submitBtn.removeAttribute('data-edit-id');submitBtn.removeAttribute('data-edit-series');}
-  var st=document.getElementById('soStatus');
-  if(st)st.innerHTML='';
-  // Reset form
-  ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-  var gr=document.getElementById('soGrams');if(gr)gr.value='';
-  var pp=document.getElementById('soPriceCard');if(pp)pp.innerHTML='';
+var COMBO_PRICES={
+  '50+50':{price:1118,grams:100,note:'2 bottles of 50g each. Save ₹78 vs single price.'},
+  '50+50+50':{price:1677,grams:150,note:'3 bottles of 50g each. Save ₹117 vs single price.'},
+  '100+100':{price:1528,grams:200,note:'2 bottles of 100g each. Save ₹70 vs single price.'},
+  '200+200':{price:2378,grams:400,note:'2 bottles of 200g each. ₹200 advance required. Free delivery on 2nd if 1st delivered.'}
+};
+
+function updateComboPrice(){
+  var combo=document.getElementById('soCombo').value;
+  var priceEl=document.getElementById('soComboPrice');
+  var noteEl=document.getElementById('comboNote');
+  if(!combo||!COMBO_PRICES[combo]){priceEl.value='';noteEl.innerHTML='';return;}
+  var c=COMBO_PRICES[combo];
+  priceEl.value=c.price;
+  noteEl.innerHTML='<b>📦 '+combo+'</b>: '+c.note+'<br><b>Total grams:</b> '+c.grams+'g, <b>Selling price:</b> ₹'+c.price;
+  // Auto-set advance for 200+200
+  if(combo==='200+200'){
+    document.getElementById('soPayment').value='Advance';
+    updatePaymentView();
+    var advInp=document.getElementById('soAdvance');
+    if(advInp)advInp.value=200;
+  }
+  updateFinalPrice();
 }
 
-function submitSalesOrderUI(){var g=function(id){var el=document.getElementById(id);return el?el.value:'';};var name=g('soName').trim(),phone=g('soPhone').trim(),address=g('soAddress').trim(),pincode=g('soPincode').trim();var _mpo=document.getElementById('manualPO');var postOffice=(_mpo&&_mpo.value.trim())||g('soPostOffice'),grams=parseInt(g('soGrams'))||0,state=g('soState');var st=document.getElementById('soStatus');if(!name||!phone||!address||!pincode||!grams||!postOffice){if(st)st.innerHTML='<div class="err-msg">Fill all required fields</div>';return;}var payType=g('soPayType'),screenshot=g('soScreenshot').trim();if(payType==='Advance'&&!screenshot){if(st)st.innerHTML='<div class="err-msg">Screenshot required for advance</div>';return;}var btn=document.getElementById('soSubmitBtn');
-  var editId=btn?btn.getAttribute('data-edit-id'):'';
-  var editSeries=btn?btn.getAttribute('data-edit-series'):'';
-  if(btn){btn.disabled=true;btn.textContent=editId?'Updating...':'Submitting...';}var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,brand:S.user.brand,customerName:name,phone:phone,address:address,pincode:pincode,state:state,postOffice:postOffice,grams:grams,useMultiple:g('soMultiple')==='1',paymentType:payType,screenshotUrl:screenshot,notes:g('soNotes').trim()};google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit Order';}if(r.success){
-          var isEdit=editId&&editId.length>0;
-          if(st)st.innerHTML='<div class="ok-msg">'+(isEdit?'Order #'+(editSeries||r.series)+' updated!':'Order #'+r.series+' submitted!')+(r.advanceRequired?' Advance required.':'')+'</div>';
-          if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});document.getElementById('soPriceCard').innerHTML='';loadMyOrdersTable();}else{if(st){if(r.duplicate){st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';}else{st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent=editId?'Update Order':'Submit Order';}if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';});
-  // Route to update or create based on edit mode
-  if(editId){
-    google.script.run.withSuccessHandler(function(r){
-      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-      if(r&&r.success){
-        if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated successfully!</div>';
-        if(btn){btn.removeAttribute('data-edit-id');btn.removeAttribute('data-edit-series');btn.textContent='Submit Order';}
-        ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-        var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
-        var st2=document.getElementById('soStatus');if(st2)st2.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' updated!</div>';
-        loadMyOrdersTable();
-      }else{
-        if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Update failed')+'</div>';
-      }
-    }).withFailureHandler(function(e){
-      if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-      if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
-    }).updateSalesOrder(data);
+function updateSinglePrice(){
+  var grams=parseInt(document.getElementById('soGrams').value);
+  var p=PRICES[grams];
+  if(!p)return;
+  document.getElementById('soMRP').value=p.mrp;
+  document.getElementById('soSellPrice').value=p.cod;
+  updateFinalPrice();
+}
+
+function updateFinalPrice(){
+  var type=document.getElementById('soProductType').value;
+  var price=type==='combo'?
+    (parseFloat(document.getElementById('soComboPrice').value)||0):
+    (parseFloat(document.getElementById('soSellPrice').value)||0);
+  var disc=parseFloat(document.getElementById('soDiscount').value)||0;
+  document.getElementById('soFinalPrice').value=Math.max(0,price-disc);
+}
+
+function updatePaymentView(){
+  var pay=document.getElementById('soPayment').value;
+  var extra=document.getElementById('paymentExtra');
+  var advLabel=document.getElementById('advLabel');
+  if(pay==='Prepaid'){
+    extra.style.display='block';advLabel.textContent='Amount Paid (Full)';
+    document.getElementById('soAdvance').value=document.getElementById('soFinalPrice').value;
+  } else if(pay==='Advance'){
+    extra.style.display='block';advLabel.textContent='Advance Amount';
   } else {
-    google.script.run
-      .withSuccessHandler(function(r){
-        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-        if(r&&r.success){
-          if(st)st.innerHTML='<div class="ok-msg">✅ Order #'+r.series+' submitted!'+(r.advanceRequired?' Advance required.':'')+'</div>';
-          ['soName','soPhone','soAddress','soPincode','soNotes','soScreenshot'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-          var pc=document.getElementById('soPriceCard');if(pc)pc.innerHTML='';
-          loadMyOrdersTable();
-        }else{
-          if(st){
-            if(r&&r.duplicate)st.innerHTML='<div class="err-msg">Order already submitted today for this customer.</div>';
-            else st.innerHTML='<div class="err-msg">'+(r&&r.msg?r.msg:'Error submitting')+'</div>';
-          }
-        }
-      })
-      .withFailureHandler(function(e){
-        if(btn){btn.disabled=false;btn.textContent='Submit Order';}
-        if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
-      })
-      .submitSalesOrder(data);
+    extra.style.display='none';
   }
 }
+
+function lookupSOPincode(){
+  var pin=document.getElementById('soPincode').value.trim();
+  if(pin.length!==6)return;
+  var st=document.getElementById('soPincodeStatus');
+  st.innerHTML='<span style="color:#fb923c">🔍 Looking up...</span>';
+  fetch('https://api.postalpincode.in/pincode/'+pin)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d[0]&&d[0].PostOffice&&d[0].PostOffice[0]){
+        var p=d[0].PostOffice[0];
+        document.getElementById('soPostOffice').value=p.Name;
+        document.getElementById('soState').value=p.State;
+        st.innerHTML='<span style="color:#34d399">✅ '+p.Name+', '+p.State+'</span>';
+      }else{st.innerHTML='<span style="color:#f87171">Pincode not found</span>';}
+    })
+    .catch(function(){st.innerHTML='<span style="color:#f87171">Lookup failed</span>';});
+}
+
+function resetOrderForm(){
+  ['soName','soPhone','soAddress','soPincode','soPostOffice','soState','soDiscount','soAdvance','soScreenshotSno','soNotes'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('soProductType').value='single';
+  document.getElementById('soGrams').value='200';
+  document.getElementById('soPayment').value='COD';
+  updateProductView();
+  updatePaymentView();
+}
+
+
+function submitSalesOrderUI(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var st=document.getElementById('soStatus');
+  // Validate
+  var name=g('soName').trim(),phone=g('soPhone').trim();
+  var address=g('soAddress').trim(),pincode=g('soPincode').trim();
+  var postOffice=g('soPostOffice').trim(),state=g('soState').trim();
+  if(!name||!phone||!address||!pincode||!postOffice){
+    if(st)st.innerHTML='<div class="err-msg">Fill all customer fields</div>';return;
+  }
+  if(phone.length!==10){if(st)st.innerHTML='<div class="err-msg">Phone must be 10 digits</div>';return;}
+  if(pincode.length!==6){if(st)st.innerHTML='<div class="err-msg">Pincode must be 6 digits</div>';return;}
+
+  // Product/combo
+  var prodType=g('soProductType');
+  var grams=0,comboType='',sellPrice=0;
+  if(prodType==='combo'){
+    comboType=g('soCombo');
+    if(!comboType){if(st)st.innerHTML='<div class="err-msg">Select a combo pack</div>';return;}
+    grams=COMBO_PRICES[comboType].grams;
+    sellPrice=COMBO_PRICES[comboType].price;
+  } else {
+    grams=parseInt(g('soGrams'))||0;
+    sellPrice=parseFloat(g('soSellPrice'))||0;
+  }
+
+  var discount=parseFloat(g('soDiscount'))||0;
+  var finalPrice=parseFloat(g('soFinalPrice'))||sellPrice-discount;
+  var paymentType=g('soPayment');
+  var advance=parseFloat(g('soAdvance'))||0;
+  var screenshotSno=g('soScreenshotSno').trim();
+
+  if((paymentType==='Prepaid'||paymentType==='Advance')&&!screenshotSno){
+    if(st)st.innerHTML='<div class="err-msg">Enter Screenshot Serial No for '+paymentType+' payment</div>';return;
+  }
+  if(paymentType==='Advance'&&advance<=0){
+    if(st)st.innerHTML='<div class="err-msg">Enter advance amount</div>';return;
+  }
+
+  var data={
+    empId:S.user.empId,
+    customerName:name,phone:phone,address:address,pincode:pincode,
+    postOffice:postOffice,state:state,
+    grams:grams,
+    comboType:comboType,
+    productType:prodType,
+    sellPrice:sellPrice,
+    discount:discount,
+    finalPrice:finalPrice,
+    paymentType:paymentType,
+    advance:advance,
+    screenshotSno:screenshotSno,
+    source:g('soSource'),
+    notes:g('soNotes').trim(),
+    orderDate:g('soDate'),
+    brand:S.user.brand
+  };
+
+  if(st)st.innerHTML='<div class="loading"><div class="spin-sm"></div> Submitting order...</div>';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.success){
+        if(st)st.innerHTML='<div class="ok-msg">✅ Order saved! Order #'+r.series+'</div>';
+        showToast('✅ Order #'+r.series+' submitted!','green');
+        setTimeout(function(){resetOrderForm();},1200);
+      }else{
+        if(st)st.innerHTML='<div class="err-msg">'+(r&&r.msg||'Failed')+'</div>';
+      }
+    })
+    .withFailureHandler(function(e){
+      if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';
+    })
+    .submitSalesOrder(data);
+}
+
+
 function loadMyOrdersTable(){
   var el=document.getElementById('myOrdersWrap');if(!el)return;
   var statusF=document.getElementById('myOrdStatusF')?document.getElementById('myOrdStatusF').value:'';
@@ -1483,7 +1623,7 @@ function lgExportCSV(el){
   var PR={50:{l:14,b:9,h:7,w:114},100:{l:14,b:9,h:7,w:192},150:{l:14,b:12,h:9,w:198},200:{l:14,b:12,h:9,w:310},250:{l:14,b:12,h:9,w:398},300:{l:14,b:12,h:9,w:466},350:{l:14,b:12,h:9,w:488},400:{l:14,b:12,h:9,w:498},450:{l:14,b:12,h:9,w:540},500:{l:14,b:12,h:9,w:810},1000:{l:14,b:12,h:9,w:990}};
   
   var rows=[
-    ['ArticleID','ReceiverName','ReceiverAddress1','ReceiverAddress2','ReceiverCity','ReceiverPincode','ReceiverMobile','Weight','Length','Breadth','Height','ProductType','CODAmount','ReferenceNo','SenderName','SenderAddress','SenderPincode','SenderMobile']
+    ['ArticleID','EmployeeID','ReceiverName','ReceiverAddress1','ReceiverAddress2','ReceiverCity','ReceiverPincode','ReceiverMobile','Weight','Length','Breadth','Height','ProductType','CODAmount','ReferenceNo','SenderName','SenderAddress','SenderPincode','SenderMobile']
   ];
   
   orders.forEach(function(o){
@@ -1495,6 +1635,7 @@ function lgExportCSV(el){
     var addr2=addrParts.slice(2).join(',').trim();
     rows.push([
       o.eyNumber||'',
+      o.empId||'',
       '"'+(o.customerName||'').replace(/"/g,"'")+'"',
       '"'+addr1.replace(/"/g,"'")+'"',
       '"'+addr2.replace(/"/g,"'")+'"',
@@ -1773,7 +1914,7 @@ function renderOFDDash(){var pg=document.getElementById('pg-ofdDash');if(!pg)ret
 function loadOFDSummary(){var el=document.getElementById('ofdSummaryWrap');if(!el)return;google.script.run.withSuccessHandler(function(s){var h='<div class="stat-grid"><div class="sc" style="--sc-col:#f87171"><div class="sl">OFD Today</div><div class="sv">'+s.totalOFD+'</div></div><div class="sc" style="--sc-col:#34d399"><div class="sl">Called</div><div class="sv">'+s.called+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Not Called</div><div class="sv" style="color:#f87171">'+s.notCalled+'</div></div><div class="sc" style="--sc-col:#34d399"><div class="sl">Will Receive</div><div class="sv">'+s.willReceive+'</div></div><div class="sc" style="--sc-col:#fcd34d"><div class="sl">Not Available</div><div class="sv">'+s.notAvailable+'</div></div><div class="sc" style="--sc-col:#f87171"><div class="sl">Wants Cancel</div><div class="sv" style="color:#f87171">'+s.wantsCancel+'</div></div></div>';if(s.orders&&s.orders.length){h+='<div class="table-wrap"><div class="table-hdr"><div class="table-title">OFD Orders</div></div><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Phone</th><th>COD</th><th>Employee</th><th>Called</th><th>Response</th><th>Action</th></tr></thead><tbody>';s.orders.forEach(function(o){var calledBadge=o.called==='Yes'?'<span class="badge bg">Called</span>':'<span class="badge br">Not Called</span>';var respBadge=o.response?'<span class="badge by">'+o.response+'</span>':'-';var action=o.called!=='Yes'?'<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Re-OFD</button>':'';h+='<tr><td style="font-weight:700">'+o.customerName+'</td><td>'+o.phone+'</td><td style="color:#34d399;font-weight:800">'+fnr(o.amount)+'</td><td>'+o.empName+'</td><td>'+calledBadge+'</td><td>'+respBadge+'</td><td>'+action+'</td></tr>';});h+='</tbody></table></div></div>';}else{h+='<div class="empty-state"><div class="empty-icon">&#x1F69A;</div><div>No OFD orders today</div></div>';}el.innerHTML=h;}).getOFDSummary();}
 function renderOrders(){var pg=document.getElementById('pg-orders');if(!pg)return;if(!S.user.isAdmin){renderSubmitForm(pg);return;}pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Daily Orders</div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="ordDateF" onchange="filterOrders()"></select><span class="fl">Brand:</span><select class="fsel" id="ordBrandF" onchange="filterOrders()"><option value="">All</option><option>Manveera</option></select><button class="btn btn-s" onclick="document.getElementById(\'ordDateF\').value=\'\';document.getElementById(\'ordBrandF\').value=\'\';filterOrders()">Reset</button></div><div id="ordKpis"></div><div id="ordTable"><div class="loading"><div class="spin-sm"></div></div></div>';populateFilters();filterOrders();}
 function filterOrders(){var dateF=document.getElementById('ordDateF')?document.getElementById('ordDateF').value:'';var brandF=document.getElementById('ordBrandF')?document.getElementById('ordBrandF').value:'';var all=(S.data.entries||[]).filter(function(r){return r.role==='Sales';});var filtered=dateF?all.filter(function(r){return r.date===dateF;}):all;if(brandF)filtered=filtered.filter(function(r){return r.brand===brandF;});var t={ord:0,lehya:0,astra:0};filtered.forEach(function(r){t.ord+=r.totalOrders;t.lehya+=r.totalLehya;t.astra+=r.totalAstra;});var kpi=document.getElementById('ordKpis');if(kpi)kpi.innerHTML='<div class="stat-grid"><div class="sc" style="--sc-col:#6366f1"><div class="sl">Total</div><div class="sv">'+fn(t.ord)+'</div></div><div class="sc" style="--sc-col:#a78bfa"><div class="sl">Lehya</div><div class="sv">'+fn(t.lehya)+'</div></div><div class="sc" style="--sc-col:#60a5fa"><div class="sl">Astra</div><div class="sv">'+fn(t.astra)+'</div></div></div>';var sorted=filtered.sort(function(a,b){return b.totalOrders-a.totalOrders;});var h='<div class="table-wrap"><div class="table-scroll"><table><thead><tr><th>#</th><th>Employee</th><th>Brand</th><th>Lehya</th><th>Astra</th><th>Total</th><th>Att</th></tr></thead><tbody>';sorted.forEach(function(e,i){h+='<tr><td>'+(i+1)+'</td><td style="font-weight:700">'+e.empName+'</td><td><span class="badge '+(e.brand==='Manveera'?'bi':'bg')+'">'+e.brand+'</span></td><td style="color:#a78bfa">'+e.totalLehya+'</td><td style="color:#60a5fa">'+e.astraBottles+'</td><td style="color:#34d399">'+0+'</td><td style="font-weight:800">'+e.totalOrders+'</td><td><span style="color:'+attColor(e.att)+'">'+attLabel(e.att)+'</span></td></tr>';});if(!sorted.length)h+='<tr><td colspan="8"><div class="empty-state"><div>No orders</div></div></td></tr>';h+='</tbody></table></div></div>';var tbl=document.getElementById('ordTable');if(tbl)tbl.innerHTML=h;}
-function renderSubmitForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Daily Entry</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="feDate" value="'+todayStr()+'" readonly></div><div class="fcol"><label class="label">Attendance</label><select class="select" id="feAtt"><option value="Present">Present</option><option value="Half Day">Half Day</option><option value="Absent">Absent</option></select></div></div><div style="padding:14px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:10px">Golden Lehya</div><div class="frow"><div class="fcol"><label class="label">50g</label><input type="number" class="input" id="feGL50" placeholder="0" min="0"></div><div class="fcol"><label class="label">100g</label><input type="number" class="input" id="feGL100" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">200g</label><input type="number" class="input" id="feGL200" placeholder="0" min="0"></div><div class="fcol"><label class="label">500g</label><input type="number" class="input" id="feGL500" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feLehhaCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feLehhaPre" placeholder="0" min="0"></div></div></div><div style="padding:14px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:10px">Astra</div><div class="fcol"><label class="label">Bottles</label><input type="number" class="input" id="feAstraBottles" placeholder="0" min="0"></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feAstraCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feAstraPre" placeholder="0" min="0"></div></div></div><div style="padding:14px;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:var(--r2);margin-bottom:14px"><div class="fcol"><label class="label">Facewash</label><input type="number" class="input" id="feFacewash" placeholder="0" min="0"></div></div><div class="fcol"><label class="label">Notes</label><textarea class="textarea" id="feNotes" rows="2"></textarea></div><button class="btn btn-p btn-full" onclick="submitEntryForm()" id="feSubmitBtn" style="padding:13px">Submit</button><div id="feStatus"></div></div>';}
+function renderSubmitForm(pg){pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Daily Entry</div></div><div class="card"><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="feDate" value="'+todayStr()+'" readonly></div><div class="fcol"><label class="label">Attendance</label><select class="select" id="feAtt"><option value="Present">Present</option><option value="Half Day">Half Day</option><option value="Absent">Absent</option></select></div></div><div style="padding:14px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:10px">Golden Lehya</div><div class="frow"><div class="fcol"><label class="label">50g</label><input type="number" class="input" id="feGL50" placeholder="0" min="0"></div><div class="fcol"><label class="label">100g</label><input type="number" class="input" id="feGL100" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">200g</label><input type="number" class="input" id="feGL200" placeholder="0" min="0"></div><div class="fcol"><label class="label">500g</label><input type="number" class="input" id="feGL500" placeholder="0" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feLehhaCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feLehhaPre" placeholder="0" min="0"></div></div></div><div style="padding:14px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);border-radius:var(--r2);margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:10px">Astra</div><div class="fcol"><label class="label">Bottles</label><input type="number" class="input" id="feAstraBottles" placeholder="0" min="0"></div><div class="frow"><div class="fcol"><label class="label">COD</label><input type="number" class="input" id="feAstraCod" placeholder="0" min="0"></div><div class="fcol"><label class="label">Prepaid</label><input type="number" class="input" id="feAstraPre" placeholder="0" min="0"></div></div></div><div class="fcol"><label class="label">Notes</label><textarea class="textarea" id="feNotes" rows="2"></textarea></div><button class="btn btn-p btn-full" onclick="submitEntryForm()" id="feSubmitBtn" style="padding:13px">Submit</button><div id="feStatus"></div></div>';}
 function submitEntryForm(){var g=function(id){var el=document.getElementById(id);return el?el.value:0;};var data={date:todayStr(),empId:S.user.empId,empName:S.user.name,role:S.user.role,brand:S.user.brand,attendance:g('feAtt'),gl50:Number(g('feGL50'))||0,gl100:Number(g('feGL100'))||0,gl200:Number(g('feGL200'))||0,gl500:Number(g('feGL500'))||0,astraBottles:Number(g('feAstraBottles'))||0,lehhaCod:Number(g('feLehhaCod'))||0,lehhaPre:Number(g('feLehhaPre'))||0,astraCod:Number(g('feAstraCod'))||0,astraPre:Number(g('feAstraPre'))||0,notes:g('feNotes')};var btn=document.getElementById('feSubmitBtn');if(btn){btn.disabled=true;btn.textContent='Submitting...';}google.script.run.withSuccessHandler(function(r){if(btn){btn.disabled=false;btn.textContent='Submit';}var st=document.getElementById('feStatus');if(r.success){if(st)st.innerHTML='<div class="ok-msg">Submitted!</div>';refreshData();}else{if(st)st.innerHTML='<div class="err-msg">'+(r.msg||'Error')+'</div>';}}).withFailureHandler(function(e){if(btn){btn.disabled=false;btn.textContent='Submit';}var st=document.getElementById('feStatus');if(st)st.innerHTML='<div class="err-msg">'+e.message+'</div>';}).submitEntry(data);}
 function renderEnquiries(){var pg=document.getElementById('pg-enquiries');if(!pg)return;pg.innerHTML='<div class="pg-hdr"><div class="pg-title">Enquiries Log</div></div><div class="g2"><div class="card"><div class="card-title">Log Enquiry</div><div class="frow"><div class="fcol"><label class="label">Date</label><input type="text" class="input" id="enqDate" value="'+todayStr()+'"></div><div class="fcol"><label class="label">Employee ID</label><input type="text" class="input" id="enqEmpId"></div></div><div class="frow"><div class="fcol"><label class="label">Brand</label><select class="select" id="enqBrand"><option>Manveera</option></select></div><div class="fcol"><label class="label">Count</label><input type="number" class="input" id="enqCount" min="0"></div></div><div class="frow"><div class="fcol"><label class="label">Source</label><select class="select" id="enqSource"><option>Direct</option><option>WhatsApp</option><option>Facebook</option><option>Instagram</option><option>Referral</option><option>Other</option></select></div><div class="fcol"><label class="label">Notes</label><input type="text" class="input" id="enqNotes"></div></div><button class="btn btn-p btn-full" onclick="submitEnqLogUI()" style="padding:12px">Log</button><div id="enqStatus"></div></div><div class="card"><div class="card-title">Today Summary</div><div id="enqSummary"></div></div></div><div class="fbar"><span class="fl">Date:</span><select class="fsel" id="enqDateF" onchange="loadEnqTable()"></select><span class="fl">Month:</span><select class="fsel" id="enqMonF" onchange="loadEnqTable()"></select></div><div id="enqTable"></div>';populateFilters();loadEnqSummary();loadEnqTable();}
 function loadEnqSummary(){var el=document.getElementById('enqSummary');var enqLog=S.data?S.data.enqLog||[]:[]; var td=todayStr();var total=enqLog.reduce(function(s,r){return s+r.enqCount;},0);var todayEnq=enqLog.filter(function(r){return r.date===td;}).reduce(function(s,r){return s+r.enqCount;},0);if(el)el.innerHTML='<div class="g2"><div style="text-align:center;padding:14px;background:rgba(99,102,241,.1);border-radius:var(--r)"><div style="font-size:26px;font-weight:800;color:#818cf8">'+fn(total)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Total</div></div><div style="text-align:center;padding:14px;background:rgba(16,185,129,.1);border-radius:var(--r)"><div style="font-size:26px;font-weight:800;color:#34d399">'+fn(todayEnq)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Today</div></div></div>';}
@@ -2041,7 +2182,7 @@ function renderConfirmation(){
   '<button class="btn btn-s" onclick="loadConfPendingOrders()" style="padding:5px 12px;font-size:11px">Load</button></div>'+
   '<div class="fbar"><select class="fsel" id="confPayF"><option value="">All Payment</option><option>COD</option><option>Prepaid</option><option>Advance</option></select>'+
   '<input type="text" class="fsel" id="confSearch" placeholder="Search customer..." oninput="filterConfOrders()"></div>'+
-  '<div id="confOrdersWrap"><div class="empty-state"><div>Tap Load to see pending orders</div></div></div></div>';
+  '<div class="card"><div class="card-title">🎯 Order Assignment Filters</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">'+'<button class="btn btn-p split-btn active-split" data-split="all" onclick="setSplitFilter(this)" style="padding:7px 14px;font-size:12px">📦 All Orders</button>'+'<button class="btn split-btn" data-split="my" onclick="setSplitFilter(this)" style="padding:7px 14px;font-size:12px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#818cf8">👤 My Orders</button>'+'<button class="btn split-btn" data-split="cod" onclick="setSplitFilter(this)" style="padding:7px 14px;font-size:12px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c">💵 COD Only</button>'+'<button class="btn split-btn" data-split="prepaid" onclick="setSplitFilter(this)" style="padding:7px 14px;font-size:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399">💳 Prepaid</button>'+'<button class="btn split-btn" data-split="advance" onclick="setSplitFilter(this)" style="padding:7px 14px;font-size:12px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#fcd34d">💰 Advance</button>'+'</div>'+'<div style="font-size:11px;color:var(--text3)">Auto-split: Even order # for Conf1, Odd for Conf2 | COD vs Prepaid/Advance split available</div>'+'</div>'+'<div id="confOrdersWrap"><div class="empty-state"><div>Tap Load to see pending orders</div></div></div></div>';
 
   // Auto-load pending orders
   setTimeout(function(){loadConfPendingOrders();}, 300);
@@ -2074,31 +2215,131 @@ function filterConfOrders(){
 
 function renderConfOrders(orders){
   var el=document.getElementById('confOrdersWrap');if(!el)return;
-  if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders match filters</div></div>';return;}
-  var h='<div class="table-scroll"><table><thead><tr>'+
-    '<th>#</th><th>Customer</th><th>Phone</th><th>Address</th><th>Grams</th><th>Amount</th><th>Type</th><th>Status</th><th>Actions</th>'+
+  if(!orders||!orders.length){el.innerHTML='<div class="empty-state"><div>No orders to confirm</div></div>';return;}
+
+  // Detect duplicates by phone
+  var phoneMap={};
+  orders.forEach(function(o){
+    if(!phoneMap[o.phone])phoneMap[o.phone]=[];
+    phoneMap[o.phone].push(o);
+  });
+
+  var h='<div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
+    '<span>Pending Orders <span class="badge bw">'+orders.length+'</span></span>'+
+    '<div style="display:flex;gap:8px">'+
+    '<button class="btn btn-s" onclick="showDuplicates()" style="padding:5px 12px;font-size:11px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b">⚠️ Show Duplicates</button>'+
+    '</div></div>'+
+    '<div class="table-scroll"><table><thead><tr>'+
+    '<th>#</th><th>Customer</th><th>Phone</th><th>Pin</th><th>Grams</th><th>Amount</th><th>Type</th><th>EmpID</th><th>Status</th><th style="min-width:200px">Actions</th>'+
     '</tr></thead><tbody>';
   orders.forEach(function(o){
-    var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
-    var addrShort=(o.address||'').substring(0,25)+((o.address||'').length>25?'...':'');
-    h+='<tr>'+
-      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
-      '<td style="font-weight:700">'+o.customerName+'<br><span style="font-size:10px;color:var(--text3)">'+o.phone+'</span></td>'+
-      '<td style="font-size:10px;color:var(--text2);max-width:120px" title="'+o.address+'">'+addrShort+'<br>'+o.pincode+' '+o.postOffice+'</td>'+
-      '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
+    var pClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+    var hasDuplicate=phoneMap[o.phone]&&phoneMap[o.phone].length>1;
+    var dupBadge=hasDuplicate?'<span class="badge by" style="font-size:9px;margin-left:4px">⚠️DUP</span>':'';
+    
+    // Customer details for hover
+    var hoverDetails='Address: '+(o.address||'-')+'\nPostOffice: '+(o.postOffice||'-')+'\nState: '+(o.state||'-')+'\nSource: '+(o.source||'-')+'\nNotes: '+(o.notes||'-')+(o.screenshotSno?'\nScreenshot: '+o.screenshotSno:'')+(o.advance?'\nAdvance: ₹'+o.advance:'')+'\nCreated: '+(o.createdAt||'-');
+    
+    h+='<tr data-order-id="'+o.orderId+'">'+
+      '<td style="color:#f97316;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+dupBadge+'</td>'+
+      '<td style="font-weight:700">'+o.customerName+'</td>'+
+      '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
+      '<td style="font-size:11px">'+(o.pincode||'')+'</td>'+
+      '<td>'+(o.grams===1000?'1kg':o.grams+'g')+(o.comboType?'<br><span style="font-size:9px;color:#818cf8">'+o.comboType+'</span>':'')+'</td>'+
       '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
-      '<td><span class="badge '+payClr+'">'+o.paymentType+'</span>'+(o.paymentType==='Prepaid'?'<br><span style="font-size:9px;color:#34d399">✅ Paid</span>':'')+'</td>'+
-      '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span><br><span style="font-size:10px;color:var(--text3)">'+o.empName+'</span></td>'+
+      '<td><span class="badge '+pClr+'">'+o.paymentType+'</span></td>'+
+      '<td style="color:#fb923c;font-size:11px;font-weight:700">'+(o.empId||'-')+'</td>'+
+      '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td>'+
       '<td style="white-space:nowrap">'+
-      '<button onclick="editOrderAdmin(\''+o.orderId+'\')" class="btn" style="padding:4px 8px;font-size:10px;background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fb923c;margin-bottom:3px;display:block;width:100%">✎ Edit</button>'+
-      (o.status==='Pending'?
-        '<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 8px;font-size:10px;margin-bottom:3px;display:block;width:100%">✓ Confirm</button>'+
-        '<button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 8px;font-size:10px;display:block;width:100%">✗ Reject</button>':'')+
+        '<button class="btn btn-g co-btn" data-act="confirm" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px" title="Confirm">✓</button>'+
+        '<button class="btn co-btn" data-act="reject" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171" title="Reject">✗</button>'+
+        '<button class="btn co-btn" data-act="edit" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#818cf8" title="Edit">✏️</button>'+
+        '<a href="tel:'+o.phone+'" class="btn" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);color:#22d3ee;text-decoration:none;display:inline-block" title="Call">📞</a>'+
+        '<button class="btn co-btn" data-act="view" data-oid2="'+o.orderId+'" data-details="'+hoverDetails.replace(/"/g,"&quot;")+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#c084fc" title="View Details">👁️</button>'+
+        '<button class="btn co-btn" data-act="delete" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;background:rgba(127,29,29,.4);border:1px solid rgba(239,68,68,.3);color:#f87171" title="Delete">🗑️</button>'+
       '</td></tr>';
   });
-  h+='</tbody></table></div>';
+  h+='</tbody></table></div></div>';
   el.innerHTML=h;
+
+  // Event delegation for action buttons
+  el.querySelectorAll('.co-btn').forEach(function(btn){
+    btn.onclick=function(){
+      var oid=this.getAttribute('data-oid2');
+      var act=this.getAttribute('data-act');
+      if(act==='confirm')confirmOrderUI(oid);
+      else if(act==='reject')rejectOrderUI(oid);
+      else if(act==='edit')editOrderAdmin(oid);
+      else if(act==='view'){
+        var dt=this.getAttribute('data-details').replace(/&quot;/g,'"');
+        showOrderDetails(oid,dt);
+      }
+      else if(act==='delete')deleteOrderUI(oid);
+    };
+  });
 }
+
+function showOrderDetails(orderId,details){
+  var modal=document.createElement('div');
+  modal.id='detailsModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML='<div style="background:var(--surface);border-radius:14px;padding:20px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+    '<div style="font-weight:800;font-size:16px;color:#fb923c">📋 Order Details</div>'+
+    '<button onclick="document.getElementById(\'detailsModal\').remove()" class="btn" style="padding:5px 12px;background:var(--surface2)">✕</button>'+
+    '</div>'+
+    '<div style="font-size:12px;line-height:1.8;color:var(--text2);white-space:pre-wrap">'+details+'</div>'+
+    '</div>';
+  modal.onclick=function(e){if(e.target===modal)modal.remove();};
+  document.body.appendChild(modal);
+}
+
+function deleteOrderUI(orderId){
+  if(!confirm('Delete this order? This cannot be undone.'))return;
+  showToast('Deleting...','orange');
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.success){
+        showToast('✅ Order deleted','green');
+        _removeRow(orderId);
+      } else showToast('❌ '+(r&&r.msg||'Failed'),'red');
+    })
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
+    .deleteSalesOrder(orderId);
+}
+
+function showDuplicates(){
+  var orders=window._currentConfOrders||[];
+  if(!orders.length){showToast('Load orders first','orange');return;}
+  var phoneMap={};
+  orders.forEach(function(o){
+    if(!phoneMap[o.phone])phoneMap[o.phone]=[];
+    phoneMap[o.phone].push(o);
+  });
+  var dupes=Object.keys(phoneMap).filter(function(p){return phoneMap[p].length>1;});
+  if(!dupes.length){showToast('No duplicates found ✅','green');return;}
+  var h='<div style="font-size:14px;font-weight:800;color:#f59e0b;margin-bottom:10px">⚠️ '+dupes.length+' Duplicate Phone Numbers Found</div>';
+  dupes.forEach(function(phone){
+    var ords=phoneMap[phone];
+    h+='<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:10px;margin-bottom:8px">';
+    h+='<div style="font-weight:700;color:#fbbf24">📱 '+phone+' — '+ords.length+' orders</div>';
+    ords.forEach(function(o){
+      h+='<div style="font-size:12px;margin-top:4px;color:var(--text2)">• #'+o.series+' '+o.customerName+' — '+fnr(o.finalPrice)+' ('+o.paymentType+')</div>';
+    });
+    h+='</div>';
+  });
+  var modal=document.createElement('div');
+  modal.id='dupModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML='<div style="background:var(--surface);border-radius:14px;padding:20px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+    '<div style="font-weight:800;font-size:16px">⚠️ Duplicate Orders</div>'+
+    '<button onclick="document.getElementById(\'dupModal\').remove()" class="btn" style="padding:5px 12px;background:var(--surface2)">✕</button>'+
+    '</div>'+h+'</div>';
+  modal.onclick=function(e){if(e.target===modal)modal.remove();};
+  document.body.appendChild(modal);
+}
+
 
 function submitConfCount(){
   var g=function(id){var el=document.getElementById(id);return el?parseInt(el.value)||0:0;};
@@ -2183,34 +2424,62 @@ function filterLabelQueue(){
 }
 
 function renderLabelQueueTable(orders){
-  var el=document.getElementById('labelQueueWrap');if(!el)return;
-  if(!orders.length){el.innerHTML='<div class="empty-state"><div>No orders in label queue</div></div>';return;}
-  var h='<div class="table-scroll"><table><thead><tr>'+
-    '<th>#</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th>'+
+  var el=document.getElementById('lqWrap');if(!el)return;
+  if(!orders||!orders.length){el.innerHTML='<div class="empty-state"><div>No orders in label queue</div></div>';return;}
+  
+  // Detect duplicates
+  var phoneMap={};
+  orders.forEach(function(o){if(!phoneMap[o.phone])phoneMap[o.phone]=[];phoneMap[o.phone].push(o);});
+  window._currentDEOrders=orders;
+
+  var h='<div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">'+
+    '<span>Confirmed Orders <span class="badge bg">'+orders.length+'</span></span>'+
+    '<button class="btn btn-s" onclick="showDuplicates()" style="padding:5px 12px;font-size:11px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b">⚠️ Duplicates</button>'+
+    '</div>'+
+    '<div class="table-scroll"><table><thead><tr>'+
+    '<th>#</th><th>Customer</th><th>Phone</th><th>Pin</th><th>Grams</th><th>Amount</th><th>Type</th><th>EmpID</th><th>EY</th><th>Actions</th>'+
     '</tr></thead><tbody>';
   orders.forEach(function(o){
-    var payClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
-    var actions='<button onclick="editOrderAdmin(\''+o.orderId+'\')" class="btn" style="padding:3px 7px;font-size:10px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);color:#fb923c;display:block;margin-bottom:3px">✎ Edit</button>';
-    if(o.status==='Confirmed'){
-      actions+='<button onclick="assignEYAndLabel(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">EY+Label</button>';
-    } else if(o.status==='Label Generated'){
-      actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:3px">🖨️</button>'+
-              '<button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px">Dispatch</button>';
-    }
-    h+='<tr>'+
-      '<td style="color:#fb923c;font-weight:700">#'+o.series+'</td>'+
+    var pClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+    var hasEY=o.eyNumber&&o.eyNumber.length>3;
+    var dupBadge=phoneMap[o.phone].length>1?'<span class="badge by" style="font-size:9px;margin-left:3px">⚠️</span>':'';
+    var hoverDetails='Address: '+(o.address||'-')+'\nPostOffice: '+(o.postOffice||'-')+'\nState: '+(o.state||'-')+'\nSource: '+(o.source||'-')+'\nNotes: '+(o.notes||'-')+(o.screenshotSno?'\nScreenshot: '+o.screenshotSno:'')+'\nConfirmed by: '+(o.confirmedBy||'-');
+    
+    h+='<tr data-order-id="'+o.orderId+'">'+
+      '<td style="color:#f97316;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+dupBadge+'</td>'+
       '<td style="font-weight:700">'+o.customerName+'</td>'+
       '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
-      '<td>'+(o.grams===1000||o.grams==='1000'?'1kg':o.grams+'gm')+'</td>'+
+      '<td style="font-size:11px">'+(o.pincode||'')+'</td>'+
+      '<td>'+(o.grams===1000?'1kg':o.grams+'g')+(o.comboType?'<br><span style="font-size:9px;color:#818cf8">'+o.comboType+'</span>':'')+'</td>'+
       '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
-      '<td><span class="badge '+payClr+'">'+o.paymentType+'</span></td>'+
-      '<td style="color:#22d3ee;font-size:11px;font-weight:700">'+(o.eyNumber||'<span style="color:var(--text3)">—</span>')+'</td>'+
-      '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td>'+
-      '<td style="white-space:nowrap">'+actions+'</td></tr>';
+      '<td><span class="badge '+pClr+'">'+o.paymentType+'</span></td>'+
+      '<td style="color:#fb923c;font-size:11px;font-weight:700">'+(o.empId||'-')+'</td>'+
+      '<td style="color:#22d3ee;font-weight:700;font-size:11px" data-field="ey">'+(hasEY?o.eyNumber:'<span style="color:#f59e0b">—</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+
+        (hasEY?
+          '<button class="btn btn-g de-btn" data-act="print" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px">🖨️</button>':
+          '<button class="btn btn-p de-btn" data-act="ey" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px">EY</button>')+
+        '<button class="btn de-btn" data-act="edit" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#818cf8" title="Edit">✏️</button>'+
+        '<button class="btn de-btn" data-act="view" data-oid2="'+o.orderId+'" data-details="'+hoverDetails.replace(/"/g,"&quot;")+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#c084fc" title="View">👁️</button>'+
+        '<button class="btn de-btn" data-act="delete" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;background:rgba(127,29,29,.4);border:1px solid rgba(239,68,68,.3);color:#f87171" title="Delete">🗑️</button>'+
+      '</td></tr>';
   });
-  h+='</tbody></table></div>';
+  h+='</tbody></table></div></div>';
   el.innerHTML=h;
+  // Event delegation
+  el.querySelectorAll('.de-btn').forEach(function(btn){
+    btn.onclick=function(){
+      var oid=this.getAttribute('data-oid2');
+      var act=this.getAttribute('data-act');
+      if(act==='print')printLabelUI(oid);
+      else if(act==='ey')lgAssignEY(oid);
+      else if(act==='edit')editOrderAdmin(oid);
+      else if(act==='view'){var dt=this.getAttribute('data-details').replace(/&quot;/g,'"');showOrderDetails(oid,dt);}
+      else if(act==='delete')deleteOrderUI(oid);
+    };
+  });
 }
+
 
 function submitEYBatch(){
   var raw=document.getElementById('eyBatch').value.trim();
@@ -2339,51 +2608,67 @@ function lookupDEPincode(){
 }
 
 function editOrderAdmin(orderId){
-  // Load order and show inline edit form
   google.script.run
     .withSuccessHandler(function(orders){
       var o=orders&&orders.find(function(x){return x.orderId===orderId;});
       if(!o){showToast('Order not found','red');return;}
-      // Build modal
       var modal=document.getElementById('editOrderModal');
       if(!modal){
         modal=document.createElement('div');
         modal.id='editOrderModal';
-        modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+        modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
         document.body.appendChild(modal);
       }
-      modal.innerHTML='<div style="background:var(--surface);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:20px">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
-        '<div style="font-weight:800;font-size:15px">✎ Edit Order #'+o.series+'</div>'+
-        '<button onclick="closeEditModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>'+
-        '</div>'+
-        '<div class="form-group"><label class="label">Customer Name</label><input type="text" class="input" id="edit_name" value="'+o.customerName+'"></div>'+
-        '<div class="form-group"><label class="label">Phone</label><input type="text" class="input" id="edit_phone" value="'+o.phone+'"></div>'+
-        '<div class="form-group"><label class="label">Address</label><textarea class="input" id="edit_address" rows="2">'+o.address+'</textarea></div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
-        '<div class="form-group"><label class="label">Pincode</label><input type="text" class="input" id="edit_pincode" value="'+o.pincode+'" maxlength="6" oninput="if(this.value.length===6)lookupEditPincode()"></div>'+
-        '<div class="form-group"><label class="label">State</label><input type="text" class="input" id="edit_state" value="'+(o.state||'')+'"></div>'+
-        '</div>'+
-        '<div class="form-group"><label class="label">Post Office</label><input type="text" class="input" id="edit_postoffice" value="'+o.postOffice+'"><div id="edit_pstatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
-        '<div class="form-group"><label class="label">Grams</label><select class="select" id="edit_grams">'+
-        Object.keys(PRICES).map(function(g){return '<option value="'+g+'"'+(String(o.grams)===String(g)?' selected':'')+'>'+
-          (g==='1000'?'1kg':g+'gm')+'</option>';}).join('')+
-        '</select></div>'+
-        '<div class="form-group"><label class="label">Payment Type</label><select class="select" id="edit_paytype">'+
-        ['COD','Prepaid','Advance'].map(function(p){return '<option value="'+p+'"'+(o.paymentType===p?' selected':'')+'>'+p+'</option>';}).join('')+
-        '</select></div>'+
-        '</div>'+
-        '<div class="form-group"><label class="label">Notes</label><input type="text" class="input" id="edit_notes" value="'+(o.notes||'')+'"></div>'+
-        '<div id="edit_status" style="margin-bottom:10px"></div>'+
-        '<div style="display:flex;gap:10px">'+
-        '<button onclick="saveEditAdmin(\''+orderId+'\',\''+o.series+'\')" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">💾 Save Changes</button>'+
-        '<button onclick="closeEditModal()" class="btn" style="padding:12px 16px;background:var(--surface2)">Cancel</button>'+
-        '</div></div>';
       modal.style.display='flex';
+      // Grams should be FROZEN for Prepaid/Advance, only COD can edit
+      var gramsLocked=o.paymentType!=='COD';
+      var gramsField=gramsLocked?
+        '<input class="input" id="edGrams" value="'+o.grams+'" readonly style="background:rgba(239,68,68,.08);color:#f87171;cursor:not-allowed" title="Grams cannot be changed for '+o.paymentType+' orders">':
+        '<select class="select" id="edGrams"><option value="50"'+(o.grams===50?' selected':'')+'>50g</option><option value="100"'+(o.grams===100?' selected':'')+'>100g</option><option value="150"'+(o.grams===150?' selected':'')+'>150g</option><option value="200"'+(o.grams===200?' selected':'')+'>200g</option><option value="300"'+(o.grams===300?' selected':'')+'>300g</option><option value="500"'+(o.grams===500?' selected':'')+'>500g</option><option value="1000"'+(o.grams===1000?' selected':'')+'>1kg</option></select>';
+
+      modal.innerHTML='<div style="background:var(--surface);border-radius:14px;padding:20px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+        '<div style="font-weight:800;font-size:15px;color:#fb923c">✏️ Edit Order #'+o.series+'</div>'+
+        '<button onclick="closeEditModal()" class="btn" style="padding:5px 12px;background:var(--surface2)">✕</button>'+
+        '</div>'+
+        (gramsLocked?'<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#f87171">🔒 Grams locked: '+o.paymentType+' orders cannot change quantity</div>':'')+
+        '<div class="frow">'+
+        '<div class="fcol"><label class="label">Customer Name</label><input class="input" id="edName" value="'+o.customerName+'"></div>'+
+        '<div class="fcol"><label class="label">Phone</label><input class="input" id="edPhone" value="'+o.phone+'" maxlength="10"></div>'+
+        '</div>'+
+        '<div class="frow">'+
+        '<div class="fcol" style="flex:2"><label class="label">Address</label><textarea class="input" id="edAddress" rows="2">'+o.address+'</textarea></div>'+
+        '</div>'+
+        '<div class="frow">'+
+        '<div class="fcol"><label class="label">Pincode</label><div style="display:flex;gap:5px"><input class="input" id="edPincode" value="'+o.pincode+'" maxlength="6"><button class="btn btn-s" onclick="lookupEditPincode()" style="padding:6px 10px">🔍</button></div></div>'+
+        '<div class="fcol"><label class="label">Post Office</label><input class="input" id="edPostOffice" value="'+(o.postOffice||'')+'"></div>'+
+        '</div>'+
+        '<div class="frow">'+
+        '<div class="fcol"><label class="label">Grams '+(gramsLocked?'<span style="color:#f87171">🔒</span>':'')+'</label>'+gramsField+'</div>'+
+        '<div class="fcol"><label class="label">Final Price</label><input class="input" id="edFinalPrice" type="number" value="'+o.finalPrice+'"></div>'+
+        '</div>'+
+        '<div class="frow">'+
+        '<div class="fcol"><label class="label">Payment Type</label><input class="input" value="'+o.paymentType+'" readonly style="background:rgba(249,115,22,.08);color:#fb923c"></div>'+
+        '<div class="fcol"><label class="label">Source</label><input class="input" id="edSource" value="'+(o.source||'')+'"></div>'+
+        '</div>'+
+        '<div class="frow"><div class="fcol"><label class="label">Notes</label><textarea class="input" id="edNotes" rows="2">'+(o.notes||'')+'</textarea></div></div>'+
+        '<div id="edPincodeStatus" style="font-size:11px;min-height:14px"></div>'+
+        '<div style="display:flex;gap:8px;margin-top:14px">'+
+        '<button class="btn btn-p" onclick="saveEditAdmin(\''+orderId+'\',\''+o.series+'\')" style="flex:1;padding:11px;font-weight:700">💾 Save Changes</button>'+
+        '<button class="btn" onclick="closeEditModal()" style="padding:11px 20px;background:var(--surface2)">Cancel</button>'+
+        '</div>'+
+        '<div id="edStatus" style="margin-top:6px;min-height:14px"></div></div>';
+      modal.onclick=function(e){if(e.target===modal)closeEditModal();};
     })
+    .withFailureHandler(function(e){showToast('Error: '+e.message,'red');})
     .getSalesOrders({});
 }
+
+function closeEditModal(){
+  var m=document.getElementById('editOrderModal');
+  if(m)m.style.display='none';
+}
+
 
 function lookupEditPincode(){
   var pin=document.getElementById('edit_pincode').value.trim();
@@ -2841,6 +3126,113 @@ function renderMyDash(){
     'My Recent Orders <button class="btn btn-s" onclick="loadMyOrdersTable()" style="padding:5px 12px;font-size:11px">Load</button></div>'+
     '<div id="myOrdersWrap"><div class="empty-state"><div>Tap Load to see your orders</div></div></div></div>';
 }
+
+function sendChatMsg(){
+  var inp=document.getElementById('chatInput');
+  if(!inp)return;
+  var phone=inp.value.trim();
+  if(!phone){return;}
+  if(phone.length!==10||!/^\d+$/.test(phone)){
+    chatAddMsg('Please enter a valid 10-digit phone number',false);
+    return;
+  }
+  // Add user message
+  chatAddMsg(phone,true);
+  inp.value='';
+  // Search
+  chatAddMsg('🔍 Searching...',false);
+  google.script.run
+    .withSuccessHandler(function(orders){
+      // Remove searching message
+      var msgs=document.getElementById('chatMessages');
+      if(msgs){var last=msgs.lastChild;if(last&&last.textContent==='🔍 Searching...')last.remove();}
+      orders=orders||[];
+      if(!orders.length){
+        chatAddMsg('❌ No orders found for '+phone,false);
+        return;
+      }
+      orders.forEach(function(o){
+        var det='📦 <b>#'+o.series+'</b> — '+o.customerName+'<br>'+
+          '💰 ₹'+o.finalPrice+' ('+o.paymentType+')<br>'+
+          '🏷️ EY: '+(o.eyNumber||'Not assigned')+'<br>'+
+          '📍 Status: <b>'+o.status+'</b><br>'+
+          '👤 Emp: '+(o.empId||'-')+'<br>'+
+          '📅 '+(o.createdAt||'');
+        chatAddMsg(det,false);
+      });
+      // Show update buttons
+      orders.forEach(function(o){
+        if(o.status==='Confirmed'||o.status==='Label Generated'||o.status==='Dispatched'){
+          chatAddMsg('Update delivery for #'+o.series+': <button onclick="quickUpdate(\''+o.orderId+'\',\'OFD\')" style="background:#22d3ee;border:none;border-radius:6px;padding:4px 10px;color:white;font-size:11px;cursor:pointer;margin:2px">🚚 OFD</button> <button onclick="quickUpdate(\''+o.orderId+'\',\'Delivered\')" style="background:#34d399;border:none;border-radius:6px;padding:4px 10px;color:white;font-size:11px;cursor:pointer;margin:2px">✅ Delivered</button> <button onclick="quickUpdate(\''+o.orderId+'\',\'Failed\')" style="background:#f87171;border:none;border-radius:6px;padding:4px 10px;color:white;font-size:11px;cursor:pointer;margin:2px">❌ Failed</button>',false);
+        }
+      });
+    })
+    .withFailureHandler(function(e){
+      chatAddMsg('❌ Error: '+e.message,false);
+    })
+    .getOrderByPhone(phone);
+}
+
+function chatAddMsg(msg,isUser){
+  var msgs=document.getElementById('chatMessages');
+  if(!msgs)return;
+  var d=document.createElement('div');
+  d.className='chat-msg '+(isUser?'user':'bot');
+  d.style.cssText='max-width:80%;padding:10px 14px;border-radius:12px;font-size:13px;'+
+    (isUser?'background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);align-self:flex-end':'background:rgba(255,255,255,.04);border:1px solid var(--border2);align-self:flex-start');
+  d.innerHTML=msg;
+  msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function quickUpdate(orderId,type){
+  showToast('Sending '+type+' update...','orange');
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.success){chatAddMsg('✅ '+type+' update sent for '+orderId,false);showToast('✅ Updated','green');}
+      else chatAddMsg('❌ Failed: '+(r&&r.msg||'Unknown error'),false);
+    })
+    .withFailureHandler(function(e){chatAddMsg('❌ Error: '+e.message,false);})
+    .submitDeliveryUpdate(orderId,type,'',S.user.empId);
+}
+
+
+function setSplitFilter(btn){
+  document.querySelectorAll('.split-btn').forEach(function(b){
+    b.classList.remove('active-split');
+    b.style.opacity='0.7';
+  });
+  btn.classList.add('active-split');
+  btn.style.opacity='1';
+  var filter=btn.getAttribute('data-split');
+  applyOrderSplit(filter);
+}
+
+function applyOrderSplit(filter){
+  var orders=window._allConfOrders||[];
+  var myEmpId=S.user.empId;
+  var filtered=orders;
+  if(filter==='my'){
+    // Auto-split: based on empId hash, half go to one conf person, half to other
+    // For simplicity: even/odd order series
+    filtered=orders.filter(function(o){
+      var s=parseInt(o.series)||0;
+      // Split by empId - assume MV_ID assignments use modulo
+      var empNum=parseInt(myEmpId.replace(/\D/g,''))||0;
+      if(empNum%2===0)return s%2===0; // even empId gets even orders
+      return s%2!==0; // odd empId gets odd orders
+    });
+  } else if(filter==='cod'){
+    filtered=orders.filter(function(o){return o.paymentType==='COD';});
+  } else if(filter==='prepaid'){
+    filtered=orders.filter(function(o){return o.paymentType==='Prepaid';});
+  } else if(filter==='advance'){
+    filtered=orders.filter(function(o){return o.paymentType==='Advance';});
+  }
+  window._currentConfOrders=filtered;
+  renderConfOrders(filtered);
+}
+
 
 window.onload = function() {
   var sv=localStorage.getItem('vesino_api_url')||'';

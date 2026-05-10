@@ -1037,7 +1037,35 @@ function renderDashboard(){
     mkChart('cTrend','line',tDates,[{data:tDates.map(function(d){return dm[d]||0;}),borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.1)',tension:0.5,pointRadius:4,fill:true,borderWidth:2}],{scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(255,255,255,.4)',font:{size:9},maxTicksLimit:7}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'rgba(255,255,255,.4)',font:{size:9}},beginAtZero:true}}});
   },100);
 }
-function renderSalesOrders(){var pg=document.getElementById('pg-salesOrders');if(!pg)return;if(S.user.role==='Sales'&&!S.user.isAdmin){renderSalesOrderForm(pg);return;}var title=S.user.isAdmin?'All Orders':S.user.role==='Confirmation'?'Orders to Confirm':'Orders Queue';pg.innerHTML='<div class="pg-hdr"><div class="pg-title">'+title+'</div></div><div class="fbar"><span class="fl">Status:</span><select class="fsel" id="soStatusF" onchange="loadSalesOrdersTable()"><option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option><option>Label Generated</option><option>Dispatched</option><option>Out for Delivery</option><option>Delivered</option><option>RTO</option></select><span class="fl">Date:</span><input type="text" class="fsel" id="soDateF" placeholder="dd-mm-yyyy" style="min-width:120px"><button class="btn btn-p" onclick="loadSalesOrdersTable()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'soStatusF\').value=\'\';document.getElementById(\'soDateF\').value=\'\';loadSalesOrdersTable()">Reset</button></div><div id="soTableWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div>';loadSalesOrdersTable();}
+function renderSalesOrders(){
+  var pg=document.getElementById('pg-salesOrders');if(!pg)return;
+  
+  // For Sales role - show tabs: My Orders + New Order
+  if(S.user.role==='Sales'&&!S.user.isAdmin){
+    pg.innerHTML='<div class="pg-hdr"><div class="pg-title">🛒 My Orders</div><div class="pg-sub">Manage your sales orders</div></div>'+
+      '<div class="card" style="padding:6px;margin-bottom:14px">'+
+      '<div style="display:flex;gap:6px">'+
+      '<button class="btn so-tab active-so-tab" data-tab="list" onclick="switchSOTab(this)" style="flex:1;padding:11px;font-weight:700;background:linear-gradient(135deg,#ea580c,#f97316);border:none;color:white">📋 My Orders List</button>'+
+      '<button class="btn so-tab" data-tab="new" onclick="switchSOTab(this)" style="flex:1;padding:11px;font-weight:700;background:var(--surface2);border:1px solid var(--border);color:var(--text2)">➕ New Order</button>'+
+      '</div></div>'+
+      '<div id="soListView">'+
+      '<div class="fbar">'+
+      '<span class="fl">Status:</span>'+
+      '<select class="fsel" id="soStatusF" onchange="loadMyOrdersTable()">'+
+      '<option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option>'+
+      '<option>Label Generated</option><option>Dispatched</option><option>Delivered</option>'+
+      '</select>'+
+      '<button class="btn btn-p" onclick="loadMyOrdersTable()" style="padding:7px 16px">🔄 Refresh</button>'+
+      '</div>'+
+      '<div id="myOrdersWrap"><div class="loading"><div class="spin-sm"></div> Loading your orders...</div></div>'+
+      '</div>'+
+      '<div id="soFormView" style="display:none"></div>';
+    loadMyOrdersTable();
+    return;
+  }
+  
+  // Other roles - show all orders with filters
+  var title=S.user.isAdmin?'All Orders':S.user.role==='Confirmation'?'Orders to Confirm':'Orders Queue';pg.innerHTML='<div class="pg-hdr"><div class="pg-title">'+title+'</div></div><div class="fbar"><span class="fl">Status:</span><select class="fsel" id="soStatusF" onchange="loadSalesOrdersTable()"><option value="">All</option><option>Pending</option><option>Confirmed</option><option>Rejected</option><option>Label Generated</option><option>Dispatched</option><option>Out for Delivery</option><option>Delivered</option><option>RTO</option></select><span class="fl">Date:</span><input type="text" class="fsel" id="soDateF" placeholder="dd-mm-yyyy" style="min-width:120px"><button class="btn btn-p" onclick="loadSalesOrdersTable()">Load</button><button class="btn btn-s" onclick="document.getElementById(\'soStatusF\').value=\'\';document.getElementById(\'soDateF\').value=\'\';loadSalesOrdersTable()">Reset</button></div><div id="soTableWrap"><div class="loading"><div class="spin-sm"></div> Loading...</div></div>';loadSalesOrdersTable();}
 function loadSalesOrdersTable(){var statusF=document.getElementById('soStatusF')?document.getElementById('soStatusF').value:'';var dateF=document.getElementById('soDateF')?document.getElementById('soDateF').value:'';var el=document.getElementById('soTableWrap');if(!el)return;el.innerHTML='<div class="loading"><div class="spin-sm"></div></div>';google.script.run.withSuccessHandler(function(orders){if(!orders.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">&#x1F4ED;</div><div>No orders found</div></div>';return;}var canConfirm=S.user.isAdmin||S.user.role==='Confirmation';var canLabel=S.user.isAdmin||S.user.role==='DataEntry';var h='<div class="table-wrap"><div class="table-hdr"><div class="table-title">Orders</div><div class="table-badge">'+orders.length+'</div></div><div class="table-scroll"><table><thead><tr><th>Series</th><th>Date</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th></tr></thead><tbody>';orders.forEach(function(o){var actions='';if(canConfirm&&o.status==='Pending'){actions+='<button onclick="confirmOrderUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px;margin-right:4px">Confirm</button><button onclick="rejectOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px">Reject</button>';}if(canLabel&&o.status==='Confirmed'){actions+='<button onclick="assignEYUI(\''+o.orderId+'\')" class="btn btn-p" style="padding:4px 9px;font-size:10px">Assign EY</button>';}if(canLabel&&o.status==='Label Generated'){actions+='<button onclick="printLabelUI(\''+o.orderId+'\')" class="btn btn-s" style="padding:4px 9px;font-size:10px;margin-right:4px">Print</button><button onclick="markDispatchedUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Dispatch</button>';}if((S.user.isAdmin||S.user.role==='DataEntry')&&(o.status==='Dispatched'||o.status==='Out for Delivery')){actions+='<button onclick="markOFDUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-right:4px">OFD</button><button onclick="markDeliveredUI(\''+o.orderId+'\')" class="btn btn-g" style="padding:4px 9px;font-size:10px">Delivered</button>';}if(S.user.isAdmin){actions+='<button onclick="deleteSalesOrderUI(\''+o.orderId+'\')" class="btn btn-d" style="padding:4px 9px;font-size:10px;margin-top:4px">Delete</button>';}h+='<tr><td style="font-weight:700;color:#818cf8">#'+o.series+'</td><td>'+o.date+'</td><td style="font-weight:700">'+o.customerName+'</td><td style="color:#818cf8">'+o.phone+'</td><td>'+o.grams+'gm</td><td style="font-weight:800;color:#34d399">'+fnr(o.finalPrice)+(o.discount>0?'<div style="font-size:9px;color:#f87171">-'+fnr(o.discount)+'</div>':'')+'</td><td><span class="badge '+(o.paymentType==='COD'?'bc':'by')+'">'+o.paymentType+'</span>'+(o.advanceRequired==='Yes'?'<span class="badge br" style="margin-left:4px;font-size:9px">ADV</span>':'')+'</td><td style="font-size:10px;color:#22d3ee">'+(o.eyNumber||'-')+'</td><td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td><td style="white-space:nowrap">'+actions+'</td></tr>';});h+='</tbody></table></div></div>';el.innerHTML=h;}).getSalesOrders({status:statusF,date:dateF});}
 function renderSalesOrderForm(){
   var pg=document.getElementById('pg-newOrder');if(!pg)return;
@@ -3231,6 +3259,116 @@ function applyOrderSplit(filter){
   }
   window._currentConfOrders=filtered;
   renderConfOrders(filtered);
+}
+
+
+function switchSOTab(btn){
+  document.querySelectorAll('.so-tab').forEach(function(b){
+    b.classList.remove('active-so-tab');
+    b.style.background='var(--surface2)';
+    b.style.border='1px solid var(--border)';
+    b.style.color='var(--text2)';
+  });
+  btn.classList.add('active-so-tab');
+  btn.style.background='linear-gradient(135deg,#ea580c,#f97316)';
+  btn.style.border='none';
+  btn.style.color='white';
+  var tab=btn.getAttribute('data-tab');
+  var listV=document.getElementById('soListView');
+  var formV=document.getElementById('soFormView');
+  if(tab==='list'){
+    if(listV)listV.style.display='block';
+    if(formV)formV.style.display='none';
+    loadMyOrdersTable();
+  } else {
+    if(listV)listV.style.display='none';
+    if(formV){
+      formV.style.display='block';
+      // Render form into formV by temporarily setting pg-newOrder reference
+      var tempPg=document.createElement('div');
+      tempPg.id='pg-newOrder';
+      formV.innerHTML='';
+      formV.appendChild(tempPg);
+      renderSalesOrderForm();
+    }
+  }
+}
+
+function loadMyOrdersTable(){
+  var statusF=document.getElementById('soStatusF')?document.getElementById('soStatusF').value:'';
+  var el=document.getElementById('myOrdersWrap');
+  if(!el)return;
+  el.innerHTML='<div class="loading"><div class="spin-sm"></div> Loading...</div>';
+  google.script.run
+    .withSuccessHandler(function(orders){
+      orders=orders||[];
+      // Filter to only show this user's orders
+      orders=orders.filter(function(o){return o.empId===S.user.empId;});
+      if(statusF)orders=orders.filter(function(o){return o.status===statusF;});
+      
+      if(!orders.length){
+        el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div>No orders yet</div><div style="font-size:11px;color:var(--text3);margin-top:8px">Click + New Order to create your first order</div></div>';
+        return;
+      }
+      
+      // Stats
+      var byStatus={};
+      orders.forEach(function(o){byStatus[o.status]=(byStatus[o.status]||0)+1;});
+      var totalValue=orders.reduce(function(s,o){return s+(parseFloat(o.finalPrice)||0);},0);
+      
+      var h='<div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">'+
+        '<div class="sc" style="--sc-col:#22d3ee"><div class="sl">Total Orders</div><div class="sv" style="color:#22d3ee">'+orders.length+'</div></div>'+
+        '<div class="sc" style="--sc-col:#f59e0b"><div class="sl">Pending</div><div class="sv" style="color:#fcd34d">'+(byStatus.Pending||0)+'</div></div>'+
+        '<div class="sc" style="--sc-col:#34d399"><div class="sl">Confirmed</div><div class="sv" style="color:#34d399">'+(byStatus.Confirmed||0)+'</div></div>'+
+        '<div class="sc" style="--sc-col:#fb923c"><div class="sl">Total Value</div><div class="sv" style="color:#fb923c">'+fnr(totalValue)+'</div></div>'+
+        '</div>';
+      
+      h+='<div class="card"><div class="card-title" style="display:flex;justify-content:space-between">'+
+        '<span>My Orders ('+orders.length+')</span></div>'+
+        '<div class="table-scroll"><table><thead><tr>'+
+        '<th>#</th><th>Date</th><th>Customer</th><th>Phone</th><th>Grams</th><th>Amount</th><th>Type</th><th>EY</th><th>Status</th><th>Actions</th>'+
+        '</tr></thead><tbody>';
+      orders.forEach(function(o){
+        var pClr=o.paymentType==='COD'?'bc':o.paymentType==='Prepaid'?'bg':'by';
+        var hasEY=o.eyNumber&&o.eyNumber.length>3;
+        var hoverDetails='Address: '+(o.address||'-')+'\nPostOffice: '+(o.postOffice||'-')+'\nState: '+(o.state||'-')+'\nSource: '+(o.source||'-')+'\nNotes: '+(o.notes||'-')+(o.screenshotSno?'\nScreenshot: '+o.screenshotSno:'')+(o.advance?'\nAdvance: ₹'+o.advance:'');
+        h+='<tr data-order-id="'+o.orderId+'">'+
+          '<td style="color:#f97316;font-weight:700" data-oid="'+o.orderId+'">#'+o.series+'</td>'+
+          '<td style="font-size:11px">'+(o.orderDate||o.createdAt||'').substring(0,10)+'</td>'+
+          '<td style="font-weight:700">'+o.customerName+'</td>'+
+          '<td style="color:var(--text3);font-size:11px">'+o.phone+'</td>'+
+          '<td>'+(o.grams===1000?'1kg':o.grams+'g')+(o.comboType?'<br><span style="font-size:9px;color:#818cf8">'+o.comboType+'</span>':'')+'</td>'+
+          '<td style="color:#34d399;font-weight:800">'+fnr(o.finalPrice)+'</td>'+
+          '<td><span class="badge '+pClr+'">'+o.paymentType+'</span></td>'+
+          '<td style="color:#22d3ee;font-size:11px;font-weight:700">'+(hasEY?o.eyNumber:'<span style="color:var(--text3)">—</span>')+'</td>'+
+          '<td><span class="'+statusBadgeClass(o.status)+'">'+o.status+'</span></td>'+
+          '<td style="white-space:nowrap">'+
+            '<button class="btn so-act" data-act="view" data-oid2="'+o.orderId+'" data-details="'+hoverDetails.replace(/"/g,'&quot;')+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:#c084fc" title="View Details">👁️</button>'+
+            (o.status==='Pending'||o.status==='Rejected'?
+              '<button class="btn so-act" data-act="edit" data-oid2="'+o.orderId+'" style="padding:4px 8px;font-size:10px;margin-right:2px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#818cf8" title="Edit">✏️</button>':'')+
+            '<a href="tel:'+o.phone+'" class="btn" style="padding:4px 8px;font-size:10px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);color:#22d3ee;text-decoration:none;display:inline-block" title="Call">📞</a>'+
+          '</td></tr>';
+      });
+      h+='</tbody></table></div></div>';
+      el.innerHTML=h;
+      
+      // Event delegation
+      el.querySelectorAll('.so-act').forEach(function(btn){
+        btn.onclick=function(){
+          var oid=this.getAttribute('data-oid2');
+          var act=this.getAttribute('data-act');
+          if(act==='edit')editOrderAdmin(oid);
+          else if(act==='view'){
+            var dt=this.getAttribute('data-details').replace(/&quot;/g,'"');
+            showOrderDetails(oid,dt);
+          }
+        };
+      });
+    })
+    .withFailureHandler(function(e){
+      el.innerHTML='<div class="err-msg">Error: '+e.message+'</div>';
+    })
+    .getSalesOrders({empId:S.user.empId});
 }
 
 
